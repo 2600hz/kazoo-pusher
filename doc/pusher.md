@@ -20,7 +20,7 @@ curl -v \
 -H "apns-expiration: 1" \
 -H "apns-priority: 10" \
 --http2 \
---cert voip_pushcert7.pem \
+--cert voip_pushcert.pem \
 https://api.push.apple.com/3/device/[devicetoken]
 
 * GCM is deprecated. FCM is used for Android app push. pn-type=firebase should be used instead pn-type=google
