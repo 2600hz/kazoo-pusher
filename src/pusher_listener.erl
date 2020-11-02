@@ -13,6 +13,9 @@
 
 -behaviour(gen_listener).
 
+-export([push/1
+        ]).
+
 -export([start_link/0
         ,handle_push/2
         ,handle_reg_success/2
@@ -64,11 +67,13 @@
 %%------------------------------------------------------------------------------
 -spec handle_push(kz_json:object(), kz_term:proplist()) -> 'ok'.
 handle_push(JObj, _Props) ->
+    kz_log:put_callid(JObj),
     Token = kz_json:get_value(<<"Token-ID">>, JObj),
     TokenApp = kz_json:get_ne_binary_value(<<"Token-App">>, JObj),
     TokenType = pm_module(kz_json:get_value(<<"Token-Type">>, JObj)),
     Module = kz_term:to_atom(<<"pm_",TokenType/binary>> , 'true'),
     AppEnabled = app_enabled(TokenApp, TokenType),
+    lager:info("received push ~s / ~s / ~s", [TokenType, TokenApp, Token]),
     case lists:member(Module, ?MODULES)
         andalso whereis(Module)
     of
@@ -165,12 +170,13 @@ build_push_fold(K, V, Acc, JObj, Params) ->
 %%------------------------------------------------------------------------------
 -spec start_link() -> kz_types:startlink_ret().
 start_link() ->
-    gen_listener:start_link(?SERVER, [{'bindings', ?BINDINGS}
-                                     ,{'responders', ?RESPONDERS}
-                                     ,{'queue_name', ?QUEUE_NAME}       % optional to include
-                                     ,{'queue_options', ?QUEUE_OPTIONS} % optional to include
-                                     ,{'consume_options', ?CONSUME_OPTIONS} % optional to include
-                                     ], []).
+    Options = [{'bindings', ?BINDINGS}
+              ,{'responders', ?RESPONDERS}
+              ,{'queue_name', ?QUEUE_NAME}       % optional to include
+              ,{'queue_options', ?QUEUE_OPTIONS} % optional to include
+              ,{'consume_options', ?CONSUME_OPTIONS} % optional to include
+              ],
+    gen_listener:start_link({local, ?SERVER}, ?MODULE, Options, []).
 
 %%%=============================================================================
 %%% gen_server callbacks
@@ -206,7 +212,7 @@ handle_cast({'gen_listener',{'created_queue',_Queue}}, State) ->
 handle_cast({'gen_listener',{'is_consuming',_IsConsuming}}, State) ->
     {'noreply', State};
 handle_cast({'push', JObj}, State) ->
-    lager:debug("HANDLE_PUSH_push ~p", [JObj]),
+    handle_push(JObj, []),
     {'noreply', State};
 handle_cast({'reg',JObj}, State) ->
     lager:debug("handle_cast_reg ~p",[JObj]),
@@ -266,3 +272,7 @@ code_change(_OldVsn, State, _Extra) ->
 -spec app_enabled(kz_term:api_ne_binary(), kz_term:api_binary()) -> boolean().
 app_enabled(App, TokenType) ->
     kapps_config:get_boolean(?CONFIG_CAT, [TokenType, <<"enabled">>], 'true', App).
+
+-spec push(kz_json:object()) -> ok.
+push(JObj) ->
+    gen_listener:cast(?MODULE, {'push', JObj}).
