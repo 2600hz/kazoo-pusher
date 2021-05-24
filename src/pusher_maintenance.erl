@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2013-2020, 2600Hz
+%%% @copyright (C) 2013-2021, 2600Hz
 %%% @doc Maintenance functions for all
 %%% @author Luis Azedo
 %%%
@@ -20,7 +20,7 @@
 
 -spec add_firebase_app(binary(), binary()) -> 'ok'.
 add_firebase_app(AppId, Secret) ->
-    kapps_config:set_node(?CONFIG_CAT, [<<"firebase">>, <<"api_key">>], Secret, AppId),
+    _ = kapps_config:set_node(?CONFIG_CAT, [<<"firebase">>, <<"api_key">>], Secret, AppId),
     'ok'.
 
 -spec add_apple_app(binary(), binary()) -> 'ok' | {'error', any()}.
@@ -31,8 +31,8 @@ add_apple_app(AppId, Certfile) ->
 add_apple_app(AppId, Certfile, Host) ->
     case file:read_file(Certfile) of
         {'ok', Binary} ->
-            kapps_config:set_node(?CONFIG_CAT, [<<"apple">>, <<"certificate">>], Binary, AppId),
-            kapps_config:set_node(?CONFIG_CAT, [<<"apple">>, <<"host">>], Host, AppId),
+            _ = kapps_config:set_node(?CONFIG_CAT, [<<"apple">>, <<"certificate">>], Binary, AppId),
+            _ = kapps_config:set_node(?CONFIG_CAT, [<<"apple">>, <<"host">>], Host, AppId),
             'ok';
         {'error', _} = Err -> Err
     end.
@@ -40,11 +40,11 @@ add_apple_app(AppId, Certfile, Host) ->
 -spec push(kz_term:ne_binary(), kz_term:ne_binary()) -> ok.
 push(AccountId, DeviceId) ->
     case kzd_devices:fetch(AccountId, DeviceId) of
-        {ok, Device} -> push(kz_json:get_json_value(<<"push">>, Device));
-        {error, Error} -> io:format("error: ~p~n", [Error])
+        {'ok', Device} -> push(kz_json:get_json_value(<<"push">>, Device));
+        {'error', Error} -> io:format("error: ~p~n", [Error])
     end.
 
-push(undefined) ->
+push('undefined') ->
     io:format("error: no push propeties for device~n");
 push(Push) ->
     CallId = kz_binary:rand_hex(16),

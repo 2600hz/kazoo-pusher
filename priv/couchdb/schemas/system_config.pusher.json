@@ -43,6 +43,7 @@
             "description": "pusher firebase",
             "properties": {
                 "api_key": {
+                    "default": "",
                     "description": "API Key for firebase",
                     "type": "string"
                 },

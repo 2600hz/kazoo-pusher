@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2013-2020, 2600Hz
+%%% @copyright (C) 2013-2021, 2600Hz
 %%% @doc
 %%% @author Luis Azedo
 %%%
@@ -35,10 +35,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(state, {subs_pid :: kz_term:api_pid()
-               ,subs_ref :: kz_term:api_reference()
-               }).
--type state() :: #state{}.
+-type state() :: 'ok'.
 
 %% By convention, we put the options here in macros, but not required.
 -define(BINDINGS, [{'self', []}
@@ -190,7 +187,7 @@ start_link() ->
 init([]) ->
     kz_log:put_callid(?MODULE),
     lager:debug("pusher_listener started"),
-    {'ok', #state{}}.
+    {'ok', 'ok'}.
 
 %%------------------------------------------------------------------------------
 %% @doc Handling call messages.

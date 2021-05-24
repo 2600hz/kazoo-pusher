@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2010-2020, 2600Hz
+%%% @copyright (C) 2010-2021, 2600Hz
 %%% @doc
 %%% This Source Code Form is subject to the terms of the Mozilla Public
 %%% License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -70,7 +70,7 @@ terminate(_Reason, #state{tab=ETS}) ->
 code_change(_OldVsn, State, _Extra) ->
     {'ok', State}.
 
--spec maybe_send_push_notification(push_app(), kz_json:object()) -> any().
+-spec maybe_send_push_notification(push_app(), kz_json:object()) -> 'ok'.
 maybe_send_push_notification('undefined', _JObj) -> lager:debug("no pid to send push");
 maybe_send_push_notification({Pid, Envelope}, JObj) ->
     TokenID = kz_json:get_value(<<"Token-ID">>, JObj),
@@ -104,13 +104,13 @@ get_fcm(App, ETS) ->
 -spec maybe_load_fcm(kz_term:api_binary(), ets:tid()) -> push_app().
 maybe_load_fcm(App, ETS) ->
     lager:debug("loading fcm secret for ~s", [App]),
-    FCMSecret = kapps_config:get_binary(?CONFIG_CAT, [<<"firebase">>, <<"api_key">>], 'undefined', App),
+    FCMSecret = kapps_config:get_binary(?CONFIG_CAT, [<<"firebase">>, <<"api_key">>], <<>>, App),
     EnvelopeJObj = kapps_config:get_json(?CONFIG_CAT, [<<"firebase">>, <<"headers">>], kz_json:new(), App),
     Envelope = kz_json:to_map(EnvelopeJObj),
     maybe_load_fcm(App, ETS, FCMSecret, Envelope).
 
--spec maybe_load_fcm(kz_term:api_binary(), ets:tid(), kz_term:api_binary(), map()) -> push_app().
-maybe_load_fcm(App, _, 'undefined', _) ->
+-spec maybe_load_fcm(kz_term:api_binary(), ets:tid(), binary(), map()) -> push_app().
+maybe_load_fcm(App, _ETS, <<>>, _Envelope) ->
     lager:debug("firebase pusher api_key for app ~s not found", [App]),
     'undefined';
 maybe_load_fcm(App, ETS, APIKey, Envelope) ->
