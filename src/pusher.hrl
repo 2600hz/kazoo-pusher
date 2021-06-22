@@ -9,8 +9,6 @@
 -define(APP_VERSION, <<"4.0.0">>).
 -define(CONFIG_CAT, ?APP_NAME).
 
--define(CACHE_NAME, 'pusher_cache').
-
 -define(DEFAULT_APNS_HOST, <<"api.push.apple.com">>).
 -define(TOKEN_KEY, <<"Token-ID">>).
 -define(TOKEN_PROXY_KEY, <<"Proxy-Path">>).
@@ -19,17 +17,8 @@
 
 -type push_app() :: {kz_term:api_pid(), map()} | 'undefined'.
 
--ifdef(OTP_RELEASE).
-%% >= OTP 21
 -define(CATCH(Type, Reason, Stacktrace), Type:Reason:Stacktrace).
 -define(LOGSTACK(Stacktrace), kz_log:log_stacktrace(Stacktrace)).
--define(STACK(Stacktrace), Stacktrace).
--else.
-%% =< OTP 20
--define(CATCH(Type, Reason, Stacktrace), Type:Reason).
--define(LOGSTACK(Stacktrace), kz_log:log_stacktrace()).
--define(STACK(Stacktrace), erlang:get_stacktrace()).
--endif.
 
 -define(PUSHER_HRL, 'true').
 -endif.

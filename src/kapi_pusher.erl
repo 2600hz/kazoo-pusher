@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2013-2020, 2600Hz
+%%% @copyright (C) 2013-2021, 2600Hz
 %%% @doc
 %%% @author Luis Azedo
 %%%
@@ -144,7 +144,7 @@ unbind_q(Queue, Props) ->
 unbind_q(Queue, Type, Token, 'undefined') ->
     kz_amqp_util:unbind_q_from_exchange(Queue, push_routing_key(Type, Token), ?PUSH_EXCHANGE);
 unbind_q(Queue, Type, Token, ['push'|Restrict]) ->
-    kz_amqp_util:unbind_q_from_exchange(Queue, push_routing_key(Type, Token), ?PUSH_EXCHANGE),
+    _ = kz_amqp_util:unbind_q_from_exchange(Queue, push_routing_key(Type, Token), ?PUSH_EXCHANGE),
     unbind_q(Queue, Type, Token, Restrict);
 unbind_q(Queue, Type, Token, [_|Restrict]) ->
     unbind_q(Queue, Type, Token, Restrict);
