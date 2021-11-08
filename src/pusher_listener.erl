@@ -133,11 +133,16 @@ maybe_update_push_token(AccountId, AuthorizingId, UA, JObj, Params) ->
     case kz_datamgr:open_cache_doc(AccountDb, AuthorizingId) of
         {'ok', Doc} ->
             Push = kz_json:get_value(<<"push">>, Doc),
-            case build_push(UA, JObj, Params, kz_json:new()) of
-                Push -> lager:debug("push exists: ~p", [Push]);
-                NewPush ->
-                    {'ok', _} = kz_datamgr:save_doc(AccountDb, kz_json:set_value(<<"push">>, NewPush, Doc)),
-                    lager:debug("setting push object for ~s: ~s: ~p", [AccountId, AuthorizingId, NewPush])
+            NewPush = build_push(UA, JObj, Params, kz_json:new()),
+            case kz_json:are_equal(Push, NewPush) of
+                true ->
+                    lager:debug("push not changed : ~s", [kz_json:encode(Push)]);
+                false ->
+                    lager:debug("setting push object for ~s: ~s: ~s", [AccountId, AuthorizingId, kz_json:encode(NewPush)]),
+                    case kz_datamgr:save_doc(AccountDb, kz_json:set_value(<<"push">>, NewPush, Doc)) of
+                        {'ok', _} -> lager:debug("push object for ~s: ~s updated successfuly", [AccountId, AuthorizingId]);
+                        {error, _Err} -> lager:warning("push object for ~s: ~s was not updated => ~p", [AccountId, AuthorizingId, _Err])
+                    end
             end;
         {'error', _} -> lager:debug("failed to open ~s in ~s", [AuthorizingId, AccountId])
     end.
@@ -268,6 +273,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%------------------------------------------------------------------------------
 -spec app_enabled(kz_term:api_ne_binary(), kz_term:api_binary()) -> boolean().
 app_enabled(App, TokenType) ->
+    lager:info("checking if ~p / ~p is enabled", [App, TokenType]),
     kapps_config:get_boolean(?CONFIG_CAT, [TokenType, <<"enabled">>], 'true', App).
 
 -spec push(kz_json:object()) -> ok.
