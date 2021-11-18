@@ -108,7 +108,13 @@ maybe_process_reg_success(UA, JObj) ->
     Params = A ++ B,
     TokenKey = kz_json:get_value(?TOKEN_KEY, UA),
     Token = props:get_value(TokenKey, Params),
-    maybe_process_reg_success(Token, kz_json:set_value(<<"Token-Proxy">>, ?TOKEN_PROXY_KEY, UA) , JObj, Params).
+    maybe_process_reg_success(Token, add_proxy_keys(UA) , JObj, Params).
+
+add_proxy_keys(UA) ->
+    KVs = [{<<"Token-Proxy">>, ?TOKEN_PROXY_KEY}
+          ,{<<"Token-Public-Proxy">>, ?TOKEN_PUBLIC_PROXY_KEY}
+          ],
+    kz_json:set_values(KVs, UA).
 
 -spec maybe_process_reg_success(kz_term:api_binary(), kz_json:object(), kz_json:object(), kz_term:proplist()) -> 'ok'.
 maybe_process_reg_success('undefined', _UA, _JObj, _Params) -> 'ok';
