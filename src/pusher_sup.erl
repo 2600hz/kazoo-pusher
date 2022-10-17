@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2013-2021, 2600Hz
+%%% @copyright (C) 2013-2022, 2600Hz
 %%% @doc
 %%% This Source Code Form is subject to the terms of the Mozilla Public
 %%% License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -21,6 +21,7 @@
 %% Helper macro for declaring children of supervisor
 -define(CHILDREN, [?SUPER('pusher_module_sup')
                   ,?WORKER('pusher_listener')
+                  ,?WORKER('pusher_voicemail_notification')
                   ]).
 
 %%==============================================================================
