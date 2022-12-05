@@ -22,6 +22,7 @@
 -define(CHILDREN, [?SUPER('pusher_module_sup')
                   ,?WORKER('pusher_listener')
                   ,?WORKER('pusher_voicemail_notification')
+                  ,?WORKER('pusher_missed_call_notification')
                   ]).
 
 %%==============================================================================

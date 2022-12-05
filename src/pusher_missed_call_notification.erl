@@ -1,0 +1,247 @@
+%%%-----------------------------------------------------------------------------
+%%% @copyright (C) 2013-2022, 2600Hz
+%%% @doc
+%%% @author Wimal Dhammika
+%%%
+%%% This Source Code Form is subject to the terms of the Mozilla Public
+%%% License, v. 2.0. If a copy of the MPL was not distributed with this
+%%% file, You can obtain one at https://mozilla.org/MPL/2.0/.
+%%%
+%%% @end
+%%%-----------------------------------------------------------------------------
+-module(pusher_missed_call_notification).
+-behaviour(gen_listener).
+
+-export([start_link/0, handle_message/2]).
+
+-ifdef(TEST).
+-export([find_owner_id/1]).
+-endif.
+
+-export([init/1
+        ,handle_call/3
+        ,handle_cast/2
+        ,handle_info/2
+        ,handle_event/2
+        ,terminate/2
+        ,code_change/3
+        ]).
+
+-include("pusher.hrl").
+
+-define(SERVER, ?MODULE).
+
+-record(state, {}).
+-type state() :: #state{}.
+
+-define(RESPONDERS, [{{?SERVER, 'handle_message'}
+                     ,[{<<"notification">>, <<"missed_call">>}]
+                     }
+                    ]).
+-define(BINDINGS, [{'notifications', [{'restrict_to', ['missed_call']}]}
+                  ]).
+
+-define(QUEUE_NAME, <<"pusher_missed_call_listener">>).
+-define(QUEUE_OPTIONS, [{'exclusive', 'false'}]).
+-define(CONSUME_OPTIONS, [{'exclusive', 'false'}]).
+
+%%%=============================================================================
+%%% API
+%%%=============================================================================
+
+%%------------------------------------------------------------------------------
+%% @doc Starts the server.
+%% @end
+%%------------------------------------------------------------------------------
+-spec start_link() -> kz_types:startlink_ret().
+start_link() ->
+    gen_listener:start_link({'local', ?SERVER}
+                           ,?SERVER
+                           ,[{'bindings', ?BINDINGS}
+                            ,{'responders', ?RESPONDERS}
+                            ,{'queue_name', ?QUEUE_NAME}
+                            ,{'queue_options', ?QUEUE_OPTIONS}
+                            ,{'consume_options', ?CONSUME_OPTIONS}
+                            ]
+                           ,[]
+                           ).
+%%%=============================================================================
+%%% gen_server callbacks
+%%%=============================================================================
+
+%%------------------------------------------------------------------------------
+%% @doc Initializes the server.
+%% @end
+%%------------------------------------------------------------------------------
+-spec init([]) -> {'ok', state()}.
+init([]) ->
+    {'ok', #state{}}.
+
+%%------------------------------------------------------------------------------
+%% @doc Handling call messages.
+%% @end
+%%------------------------------------------------------------------------------
+-spec handle_call(any(), kz_term:pid_ref(), state()) -> kz_types:handle_call_ret_state(state()).
+handle_call(_Request, _From, State) ->
+    {'noreply', State}.
+
+%%------------------------------------------------------------------------------
+%% @doc Handling cast messages.
+%% @end
+%%------------------------------------------------------------------------------
+-spec handle_cast(any(), state()) -> kz_types:handle_cast_ret_state(state()).
+handle_cast({'gen_listener', {'created_queue', _QueueName}}, State) ->
+    kz_log:put_callid(?MODULE),
+    {'noreply', State};
+handle_cast({'gen_listener', {'is_consuming', _IsConsuming}}, State) ->
+    kz_log:put_callid(?MODULE),
+    {'noreply', State};
+handle_cast(_Msg, State) ->
+    {'noreply', State}.
+
+%%------------------------------------------------------------------------------
+%% @doc Handling all non call/cast messages.
+%% @end
+%%------------------------------------------------------------------------------
+-spec handle_info(any(), state()) -> kz_types:handle_info_ret_state(state()).
+handle_info({'EXIT', _Pid, 'normal'}, State) ->
+    {'noreply', State};
+handle_info(_Info, State) ->
+    lager:debug("unhandled message: ~p", [_Info]),
+    {'noreply', State}.
+
+%%------------------------------------------------------------------------------
+%% @doc Allows listener to pass options to handlers.
+%% @end
+%%------------------------------------------------------------------------------
+-spec handle_event(kz_json:object(), kz_term:proplist()) -> gen_listener:handle_event_return().
+handle_event(JObj, _State) ->
+    CallId = kz_log:find_callid(JObj),
+    lager:debug("instrumenting push for call_id ~p", [CallId]),
+    {'reply', []}.
+
+%%------------------------------------------------------------------------------
+%% @doc This function is called by a `gen_server' when it is about to
+%% terminate. It should be the opposite of `Module:init/1' and do any
+%% necessary cleaning up. When it returns, the `gen_server' terminates
+%% with Reason. The return value is ignored.
+%%
+%% @end
+%%------------------------------------------------------------------------------
+-spec terminate(any(), state()) -> 'ok'.
+terminate(_Reason, _State) ->
+    lager:debug("listener terminating: ~p", [_Reason]).
+
+%%------------------------------------------------------------------------------
+%% @doc Convert process state when code is changed.
+%% @end
+%%------------------------------------------------------------------------------
+-spec code_change(any(), state(), any()) -> {'ok', state()}.
+code_change(_OldVsn, State, _Extra) ->
+    {'ok', State}.
+
+%%%=============================================================================
+%%% Internal functions
+%%%=============================================================================
+
+%%------------------------------------------------------------------------------
+%% @doc
+%% @end
+%%------------------------------------------------------------------------------
+
+-spec handle_message(kz_json:object(), state()) -> 'ok'.
+handle_message(JObj, _State) ->
+    AccountId = kz_json:get_ne_binary_value(<<"Account-ID">>, JObj),
+    OwnerId = get_owner_id(JObj, AccountId),
+    generate_and_maybe_push_payload(JObj, AccountId, OwnerId).
+
+-spec get_owner_id(kz_json:object(), kz_term:ne_binary()) -> kz_term:ne_binary().
+get_owner_id(JObj, AccountId) ->
+    ToUser = kz_json:get_ne_binary_value(<<"To-User">>, JObj),
+    get_owner_id(JObj, AccountId
+                ,kz_datamgr:get_single_result(AccountId
+                                             ,<<"callflows/listing_by_number">>
+                                             ,[{'key', ToUser}
+                                              ,'include_docs'
+                                              ]
+                                             )
+                ).
+
+get_owner_id(_JObj, _AccountId, {'error', _E}) ->
+    ToUser = kz_json:get_ne_binary_value(<<"To-User">>, _JObj),
+    lager:info("failed to find callflow for ~s: ~p", [ToUser, _E]),
+    'undefined';
+get_owner_id(_JObj, _AccountId, {'ok', CallflowJObj}) ->
+    find_owner_id(kz_json:get_json_value([<<"doc">>, <<"flow">>], CallflowJObj)).
+
+-spec find_owner_id(kz_json:object()) -> kz_term:api_ne_binary().
+find_owner_id(FlowJObj) ->
+    find_owner_id(FlowJObj, flow_module(FlowJObj)).
+
+find_owner_id(FlowJObj, <<"user">>) ->
+    kz_json:get_ne_binary_value([<<"data">>, <<"id">>], FlowJObj);
+find_owner_id(FlowJObj, _Action) ->
+    find_owner_id_in_children(flow_children(FlowJObj)).
+
+find_owner_id_in_children([]) -> 'undefined';
+find_owner_id_in_children([Child | Children]) ->
+    case find_owner_id(Child) of
+        'undefined' -> find_owner_id_in_children(Children);
+        OwnerId -> OwnerId
+    end.
+
+flow_module(FlowJObj) ->
+    kz_json:get_ne_binary_value(<<"module">>, FlowJObj).
+
+flow_children(FlowJObj) ->
+    Children = kz_json:get_json_value(<<"children">>, FlowJObj, kz_json:new()),
+    {Kids, _BranchKeys} = kz_json:get_values(Children),
+    Kids.
+
+-spec generate_and_maybe_push_payload(kz_json:object(), kz_term:ne_binary(), kz_term:ne_binary()) -> 'ok'.
+generate_and_maybe_push_payload(JObj, AccountDb, OwnerId) ->
+    generate_and_maybe_push_payload(JObj, fetch_owned_devices(AccountDb, OwnerId)).
+
+generate_and_maybe_push_payload(_JObj, []) -> 'ok';
+generate_and_maybe_push_payload(JObj, Devices) ->
+    PushObj = generate_push_payload(JObj),
+    maybe_push_notification(PushObj, Devices).
+
+fetch_owned_devices(AccountDb, OwnerId) ->
+    {'ok', DeviceDocList} = kz_datamgr:get_results(AccountDb
+                                                  ,<<"devices/listing_by_owner">>
+                                                  ,[{'key', OwnerId}, 'include_docs']
+                                                  ),
+    DeviceDocList.
+
+generate_push_payload(JObj) ->
+    CallId = kz_json:get_ne_binary_value(<<"Call-ID">>, JObj),
+    CallerIdNumber = kz_json:get_ne_binary_value(<<"Caller-ID-Number">>, JObj),
+    CallerIdName = kz_json:get_ne_binary_value(<<"Caller-ID-Name">>, JObj),
+
+    Payload = [{<<"Call-ID">>, CallId}
+              ,{<<"Caller-ID-Number">>, CallerIdNumber}
+              ,{<<"Caller-ID-Name">>, CallerIdName}
+              ],
+    kz_json:set_values([{<<"Payload">>, kz_json:from_list(Payload)}], JObj).
+
+maybe_push_notification(PushJObj, Devices) ->
+    %% foreach device
+    lists:foreach(fun(Device) -> maybe_push_to_device(PushJObj, Device) end
+                 ,Devices
+                 ).
+
+maybe_push_to_device(PushJObj, Device) ->
+    %% if push object
+    case kz_json:get_json_value([<<"doc">>, <<"push">>], Device) of
+        'undefined' -> 'ok';
+        DevicePushJObj -> push_to_device(PushJObj, DevicePushJObj)
+    end.
+
+%% send Push notification
+push_to_device(PushJObj, DevicePushJObj) ->
+    TokenInfo = [{<<"Token-ID">>, kz_json:get_ne_binary_value(<<"Token-ID">>, DevicePushJObj)}
+                ,{<<"Token-Type">>, kz_json:get_ne_binary_value(<<"Token-Type">>, DevicePushJObj)}
+                ,{<<"Token-App">>, kz_json:get_ne_binary_value(<<"Token-App">>, DevicePushJObj)}
+                ],
+    pusher_listener:push(kz_json:set_values(TokenInfo, PushJObj)).
