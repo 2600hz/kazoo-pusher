@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2013-2020, 2600Hz
+%%% @copyright (C) 2013-2022, 2600Hz
 %%% @doc
 %%% @author James Aimonetti
 %%%
@@ -23,7 +23,9 @@
 
 -define(SERVER, ?MODULE).
 
--define(CHILDREN, [?WORKER(Mod) || Mod <- ?MODULES]).
+-define(CHILDREN, [?WORKER(kz_term:to_atom(<<"pm_", TokenType/binary>>))
+                   || TokenType <- ?TOKEN_TYPES
+                  ]).
 
 %%%=============================================================================
 %%% API functions

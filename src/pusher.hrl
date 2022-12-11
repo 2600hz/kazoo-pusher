@@ -14,7 +14,11 @@
 -define(TOKEN_PROXY_KEY, <<"Proxy-Path">>).
 -define(TOKEN_PUBLIC_PROXY_KEY, <<"Proxy-URI">>).
 
--define(MODULES, ['pm_apple', 'pm_firebase']).
+-define(TOKEN_TYPE_APPLE, <<"apple">>).
+-define(TOKEN_TYPE_FIREBASE, <<"firebase">>).
+-define(TOKEN_TYPES, [?TOKEN_TYPE_APPLE, ?TOKEN_TYPE_FIREBASE]).
+
+-define(KEY_TIMESTAMP_MS, <<"Timestamp-MS">>).
 
 -type push_app() :: {kz_term:api_pid(), map()} | 'undefined'.
 

@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2013-2021, 2600Hz
+%%% @copyright (C) 2013-2022, 2600Hz
 %%% @doc Maintenance functions for all
 %%% @author Luis Azedo
 %%%
@@ -11,33 +11,35 @@
 %%%-----------------------------------------------------------------------------
 -module(pusher_maintenance).
 
--include("pusher.hrl").
-
 -export([add_firebase_app/2
         ,add_apple_app/2, add_apple_app/3
         ,push/2
         ]).
 
--spec add_firebase_app(binary(), binary()) -> 'ok'.
+-elvis([{elvis_style, no_debug_call, disable}]).
+
+-include("pusher.hrl").
+
+-spec add_firebase_app(kz_term:ne_binary(), binary()) -> 'ok'.
 add_firebase_app(AppId, Secret) ->
-    _ = kapps_config:set_node(?CONFIG_CAT, [<<"firebase">>, <<"api_key">>], Secret, AppId),
+    _ = kapps_config:set_node(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE, <<"api_key">>], Secret, AppId),
     'ok'.
 
--spec add_apple_app(binary(), binary()) -> 'ok' | {'error', any()}.
+-spec add_apple_app(kz_term:ne_binary(), binary()) -> 'ok' | {'error', atom()}.
 add_apple_app(AppId, Certfile) ->
     add_apple_app(AppId, Certfile, ?DEFAULT_APNS_HOST).
 
--spec add_apple_app(binary(), binary(), binary()) -> 'ok' | {'error', any()}.
+-spec add_apple_app(kz_term:ne_binary(), binary(), kz_term:ne_binary()) -> 'ok' | {'error', atom()}.
 add_apple_app(AppId, Certfile, Host) ->
     case file:read_file(Certfile) of
         {'ok', Binary} ->
-            _ = kapps_config:set_node(?CONFIG_CAT, [<<"apple">>, <<"certificate">>], Binary, AppId),
-            _ = kapps_config:set_node(?CONFIG_CAT, [<<"apple">>, <<"host">>], Host, AppId),
+            _ = kapps_config:set_node(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"certificate">>], Binary, AppId),
+            _ = kapps_config:set_node(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"host">>], Host, AppId),
             'ok';
         {'error', _} = Err -> Err
     end.
 
--spec push(kz_term:ne_binary(), kz_term:ne_binary()) -> ok.
+-spec push(kz_term:ne_binary(), kz_term:ne_binary()) -> 'ok'.
 push(AccountId, DeviceId) ->
     case kzd_devices:fetch(AccountId, DeviceId) of
         {'ok', Device} -> push(kz_json:get_json_value(<<"push">>, Device));

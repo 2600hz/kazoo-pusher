@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2010-2020, 2600Hz
+%%% @copyright (C) 2010-2022, 2600Hz
 %%% @doc
 %%% This Source Code Form is subject to the terms of the Mozilla Public
 %%% License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -27,12 +27,45 @@
 -record(state, {tab :: ets:tid()}).
 -type state() :: #state{}.
 
--define(APNS_MAP, [{<<"Alert-Key">>, [<<"aps">>, <<"alert">>, <<"loc-key">>]}
-                  ,{<<"Alert-Params">>, [<<"aps">>, <<"alert">>, <<"loc-args">>]}
-                  ,{<<"Sound">>, [<<"aps">>, <<"sound">>]}
-                  ,{<<"Call-ID">>, [<<"aps">>, <<"call-id">>]}
-                  ,{<<"Payload">>, fun kz_json:merge/2}
-                  ]).
+-define(KEY_APS, <<"aps">>).
+-define(KEY_ALERT, <<"alert">>).
+
+-define(HEADER_MAP, #{<<"APNs">> => #{<<"Push-Type">> => 'apns_push_type'
+                                     ,<<"Topic">> => 'apns_topic'
+                                     }
+                     ,<<"Collapse-ID">> => 'apns_collapse_id'
+                     ,<<"Priority">> => fun set_apns_priority/2
+                     ,<<"TTL">> => fun set_apns_expiration/3
+                     }).
+-define(PAYLOAD_MAP, #{<<"Alert">> => #{<<"Title">> => [?KEY_APS, ?KEY_ALERT, <<"title">>]
+                                       ,<<"Subtitle">> => [?KEY_APS, ?KEY_ALERT, <<"subtitle">>]
+                                       ,<<"Body">> => [?KEY_APS, ?KEY_ALERT, <<"body">>]
+                                       ,<<"Title-Key">> => [?KEY_APS, ?KEY_ALERT, <<"title-loc-key">>]
+                                       ,<<"Title-Params">> => [?KEY_APS, ?KEY_ALERT, <<"title-loc-args">>]
+                                       ,<<"Body-Key">> => [?KEY_APS, ?KEY_ALERT, <<"loc-key">>]
+                                       ,<<"Body-Params">> => [?KEY_APS, ?KEY_ALERT, <<"loc-args">>]
+                                       }
+                      ,<<"APNs">> => #{<<"Alert">> => #{<<"Subtitle-Key">> => [?KEY_APS, ?KEY_ALERT, <<"subtitle-loc-key">>]
+                                                       ,<<"Subtitle-Params">> => [?KEY_APS, ?KEY_ALERT, <<"subtitle-loc-args">>]
+                                                       }
+                                      ,<<"Thread-ID">> => [?KEY_APS, <<"thread-id">>]
+                                      }
+                      ,<<"Badge">> => [?KEY_APS, <<"badge">>]
+                      ,<<"Category">> => [?KEY_APS, <<"category">>]
+                      ,<<"Content-Available">> => fun set_content_available/2
+                      ,<<"Content-Mutable">> => fun set_mutable_content/2
+                      ,<<"Sound">> => [?KEY_APS, <<"sound">>]
+                       %% For `push_req` backwards-compatibility
+                      ,<<"Call-ID">> => [?KEY_APS, <<"call-id">>]
+                      }).
+
+-type header() :: 'apns_collapse_id' | 'apns_expiration' | 'apns_id' |
+                  'apns_priority' | 'apns_push_type' | 'apns_topic'.
+-type header_v() :: kz_term:ne_binary().
+-type headers() :: #{header() => header_v()}.
+-type headers_m(K) :: #{header() => header_v()
+                       ,K := header_v()
+                       }.
 
 -spec start_link() -> kz_types:startlink_ret().
 start_link() ->
@@ -48,30 +81,35 @@ handle_call(_Request, _From, State) ->
     {'reply', {'error', 'not_implemented'}, State}.
 
 -spec handle_cast(any(), state()) -> kz_types:handle_cast_ret_state(state()).
-handle_cast({'push', JObj}, #state{tab=ETS}=State) ->
+handle_cast({'push', Token, TokenApp, JObj}, #state{tab=ETS}=State) ->
     kz_log:put_callid(JObj),
-    TokenApp = kz_json:get_value(<<"Token-App">>, JObj),
-    maybe_send_push_notification(get_apns(TokenApp, ETS), JObj),
+    maybe_send_push_notification(get_apns(TokenApp, ETS), Token, TokenApp, JObj),
     {'noreply', State};
 handle_cast('stop', State) ->
     {'stop', 'normal', State};
 handle_cast(_Msg, State) ->
     lager:debug_unsafe("unhandled cast => ~p", [_Msg]),
-    {ok, State}.
+    {'ok', State}.
 
 -spec handle_info(any(), state()) -> kz_types:handle_info_ret_state(state()).
-handle_info({'DOWN', Ref, process, Pid, Reason}, #state{tab=ETS}=State) ->
+handle_info({'connection_up', Pid}, State) ->
+    lager:debug("connection ~p up", [Pid]),
+    {'noreply', State};
+handle_info({'reconnecting', Pid}, State) ->
+    lager:debug("connection ~p reconnecting", [Pid]),
+    {'noreply', State};
+handle_info({'DOWN', Ref, 'process', Pid, Reason}, #state{tab=ETS}=State) ->
     _ = case ets:lookup(ETS, Ref) of
             [{Ref, App}] ->
                 lager:warning("received down message for ~s / ~p / ~p => ~p", [App, Pid, Ref, Reason]),
                 ets:delete(ETS, Ref),
                 ets:delete(ETS, App),
-                erlang:send_after(?MILLISECONDS_IN_SECOND * 5, self(), {reload, App});
+                erlang:send_after(?MILLISECONDS_IN_SECOND * 5, self(), {'reload', App});
             _ ->
                 lager:critical("app not found")
         end,
     {'noreply', State};
-handle_info({reload, App}, #state{tab=ETS}=State) ->
+handle_info({'reload', App}, #state{tab=ETS}=State) ->
     _ = reload_apns(App, ETS),
     {'noreply', State};
 handle_info(_Msg, State) ->
@@ -88,64 +126,101 @@ terminate(_Reason, #state{tab=ETS}) ->
 code_change(_OldVsn, State, _Extra) ->
     {'ok', State}.
 
+%%%=============================================================================
+%%% Internal functions
+%%%=============================================================================
+
+%%------------------------------------------------------------------------------
+%% @doc Format headers for logging.
+%% @end
+%%------------------------------------------------------------------------------
 -spec log_headers(map()) -> binary().
 log_headers(Headers) ->
     kz_binary:join([list_to_binary([kz_term:to_binary(K), "=", kz_term:to_binary(V)]) || {K, V} <- maps:to_list(Headers)],<<",">>).
 
--spec maybe_send_push_notification(push_app(), kz_json:object()) -> any().
-maybe_send_push_notification('undefined', _) -> 'ok';
-maybe_send_push_notification({Pid, ExtraHeaders}, JObj) ->
-    TokenID = kz_json:get_value(<<"Token-ID">>, JObj),
-    Topic = apns_topic(JObj),
-    MsgId = kz_api:msg_id(JObj),
-    Headers = kz_maps:merge(#{apns_topic => Topic, apns_id => MsgId}, ExtraHeaders),
-    Msg = build_payload(JObj),
-    lager:debug_unsafe("pushing ~s for token-id ~s : ~s", [log_headers(Headers), TokenID, kz_json:encode(kz_json:from_map(Msg))]),
+%%------------------------------------------------------------------------------
+%% @doc Send the push notification if a connection is established to APNs.
+%% @end
+%%------------------------------------------------------------------------------
+-spec maybe_send_push_notification(push_app()
+                                  ,kz_term:ne_binary()
+                                  ,kz_term:ne_binary()
+                                  ,kz_json:object()
+                                  ) -> 'ok'.
+maybe_send_push_notification('undefined', _, _, _) -> 'ok';
+maybe_send_push_notification({Pid, ExtraHeaders}, Token, TokenApp, JObj) ->
+    JObj1 = maybe_set_apns_topic(TokenApp, JObj),
+    {CustomData, JObj2} = pusher_module_util:extract_custom_data(JObj1),
+
+    FlatProps = kz_json:to_proplist(kz_json:flatten(JObj2)),
+    MsgId = kz_api:msg_id(JObj2),
+
+    Headers = build_headers(FlatProps, JObj2, MsgId, ExtraHeaders),
+    Msg = build_payload(FlatProps, JObj2, CustomData),
+
+    lager:debug_unsafe("pushing for token ~s (headers: ~s): ~s"
+                      ,[Token
+                       ,log_headers(Headers)
+                       ,kz_json:encode(kz_json:from_map(Msg))
+                       ]),
     try
-        Result = apns:push_notification(Pid, TokenID, Msg, Headers),
-        lager:debug_unsafe("apns result for ~s : ~p", [Topic, Result])
+        Result = apns:push_notification(Pid, Token, Msg, Headers),
+        lager:debug_unsafe("apns result for ~s : ~p", [TokenApp, Result]),
+        'ok'
     catch
         ?CATCH(Ex, Msg, _ST) ->
             lager:error_unsafe("PUBLISH ERROR => ~p / ~p", [Ex, Msg]),
             ?LOGSTACK(_ST)
     end.
 
--spec build_payload(kz_json:object()) -> map().
-build_payload(JObj) ->
-    kz_json:to_map(kz_json:foldl(fun map_key/3, kz_json:new(), JObj)).
+%%------------------------------------------------------------------------------
+%% @doc Build the APNs message headers, merging in the AMQP `MsgId' and any
+%% header overrides specified in the token app.
+%% @end
+%%------------------------------------------------------------------------------
+-spec build_headers(kz_json:flat_proplist()
+                   ,kz_json:object()
+                   ,kz_term:ne_binary()
+                   ,map()
+                   ) -> map().
+build_headers(FlatProps, JObj, MsgId, ExtraHeaders) ->
+    Headers = pusher_module_util:build_payload(FlatProps, JObj, ?HEADER_MAP, #{}),
+    kz_maps:merge(Headers#{apns_id => MsgId}, ExtraHeaders).
 
--spec map_key(term(), term(), kz_json:object()) -> kz_json:object().
-map_key(K, V, JObj) ->
-    case lists:keyfind(K, 1, ?APNS_MAP) of
-        'false' -> JObj;
-        {_, Fun} when is_function(Fun, 2) -> Fun(V, JObj);
-        {_, K1} -> kz_json:set_value(K1, V, JObj)
-    end.
+%%------------------------------------------------------------------------------
+%% @doc Build the APNs message payload.
+%% @end
+%%------------------------------------------------------------------------------
+-spec build_payload(kz_json:flat_proplist()
+                   ,kz_json:object()
+                   ,pusher_module_util:payload(kz_json:key())
+                   ) -> pusher_module_util:payload(kz_json:key()).
+build_payload(FlatProps, JObj, CustomData) ->
+    pusher_module_util:build_payload(FlatProps, JObj, ?PAYLOAD_MAP, CustomData).
 
--spec reload_apns(kz_term:api_binary(), ets:tid()) ->  ok | reference().
+-spec reload_apns(kz_term:ne_binary(), ets:tid()) -> 'ok' | reference().
 reload_apns(App, ETS) ->
     case get_apns(App, ETS) of
-        undefined -> erlang:send_after(?MILLISECONDS_IN_SECOND * 5, self(), {reload, App});
-        _Push -> ok
+        'undefined' -> erlang:send_after(?MILLISECONDS_IN_SECOND * 5, self(), {'reload', App});
+        _Push -> 'ok'
     end.
 
--spec get_apns(kz_term:api_binary(), ets:tid()) -> push_app().
-get_apns('undefined', _) -> 'undefined';
+-spec get_apns(kz_term:ne_binary(), ets:tid()) -> push_app().
 get_apns(App, ETS) ->
     case ets:lookup(ETS, App) of
         [] -> maybe_load_apns(App, ETS);
         [{App, Push}] -> Push
     end.
 
--spec maybe_load_apns(kz_term:api_binary(), ets:tid()) -> push_app().
+-spec maybe_load_apns(kz_term:ne_binary(), ets:tid()) -> push_app().
 maybe_load_apns(App, ETS) ->
-    CertBin = kapps_config:get_ne_binary(?CONFIG_CAT, [<<"apple">>, <<"certificate">>], 'undefined', App),
-    Host = kapps_config:get_ne_binary(?CONFIG_CAT, [<<"apple">>, <<"host">>], ?DEFAULT_APNS_HOST, App),
-    ExtraHeaders = kapps_config:get_json(?CONFIG_CAT, [<<"apple">>, <<"headers">>], kz_json:new(), App),
+    CertBin = kapps_config:get_ne_binary(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"certificate">>], 'undefined', App),
+    Host = kapps_config:get_ne_binary(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"host">>], ?DEFAULT_APNS_HOST, App),
+    ExtraHeaders = kapps_config:get_json(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"headers">>], kz_json:new(), App),
     Headers = kz_maps:keys_to_atoms(kz_json:to_map(ExtraHeaders)),
     maybe_load_apns(App, ETS, CertBin, Host, Headers).
 
--spec maybe_load_apns(kz_term:api_binary()
+-spec maybe_load_apns(kz_term:ne_binary()
                      ,ets:tid()
                      ,kz_term:api_ne_binary()
                      ,kz_term:ne_binary()
@@ -188,12 +263,18 @@ maybe_load_apns(App, ETS, CertBin, Host, Headers) ->
             undefined
     end.
 
--spec apns_topic(kz_json:object()) -> binary().
-apns_topic(JObj) ->
-    TokenApp = kz_json:get_ne_binary_value(<<"Token-App">>, JObj),
-    TokenType = kz_json:get_ne_binary_value(<<"Token-Type">>, JObj),
+%%------------------------------------------------------------------------------
+%% @doc Set the APNs topic on the push req if unspecified.
+%% @end
+%%------------------------------------------------------------------------------
+-spec maybe_set_apns_topic(kz_term:ne_binary(), kz_json:object()) -> kz_json:object().
+maybe_set_apns_topic(TokenApp, JObj) ->
+    kz_json:insert_value([<<"APNs">>, <<"Topic">>], apns_topic(TokenApp), JObj).
+
+-spec apns_topic(kz_term:ne_binary()) -> kz_term:ne_binary().
+apns_topic(TokenApp) ->
     case kapps_config:get_ne_binary(<<"pusher">>
-                                   ,[TokenType, <<"apns_topic">>]
+                                   ,[?TOKEN_TYPE_APPLE, <<"apns_topic">>]
                                    ,'undefined'
                                    ,TokenApp
                                    )
@@ -203,6 +284,64 @@ apns_topic(JObj) ->
     end.
 
 %% Retains the old behaviour
--spec default_apns_topic(kz_term:ne_binary()) -> kz_term:ne_binary().
+-spec default_apns_topic(kz_term:ne_binary()) -> binary().
 default_apns_topic(TokenApp) ->
     re:replace(TokenApp, <<"\\.(?:dev|prod)$">>, <<>>, [{'return', 'binary'}]).
+
+%%------------------------------------------------------------------------------
+%% @doc Set the `apns-priority' header.
+%% @end
+%%------------------------------------------------------------------------------
+-spec set_apns_priority(kz_term:ne_binary(), headers()) -> headers_m('apns_priority').
+set_apns_priority(PriorityBin, Headers) ->
+    Priority = apns_priority(PriorityBin),
+    Headers#{apns_priority => kz_term:to_binary(Priority)}.
+
+-spec apns_priority(kz_term:ne_binary()) -> 1 | 5 | 10.
+apns_priority(<<"low">>) -> 1;
+apns_priority(<<"normal">>) -> 5;
+apns_priority(<<"high">>) -> 10.
+
+%%------------------------------------------------------------------------------
+%% @doc Set the `apns-expiration' header. A value of `0' tells APNs to only try
+%% delivery once.
+%% @end
+%%------------------------------------------------------------------------------
+-spec set_apns_expiration(integer(), kz_json:object(), headers()) -> headers_m('apns_expiration').
+set_apns_expiration(0, _, Headers) -> set_apns_expiration(0, Headers);
+set_apns_expiration(TTL, JObj, Headers) ->
+    TimestampMs = pusher_util:timestamp_ms(JObj),
+    Expiration = TimestampMs div 1000 + TTL,
+    set_apns_expiration(Expiration, Headers).
+
+-spec set_apns_expiration(integer(), headers()) -> headers_m('apns_expiration').
+set_apns_expiration(Expiration, Headers) ->
+    Headers#{apns_expiration => kz_term:to_binary(Expiration)}.
+
+%%------------------------------------------------------------------------------
+%% @doc Set whether the notification should be delivered as a silent background
+%% update.
+%% @end
+%%------------------------------------------------------------------------------
+-spec set_content_available(boolean(), map()) -> map().
+set_content_available(ContentAvailable, Payload) ->
+    kz_maps:put([?KEY_APS, <<"content-available">>]
+               ,Payload
+               ,to_integer(ContentAvailable)
+               ).
+
+%%------------------------------------------------------------------------------
+%% @doc Set whether a notification service app extensions should be able to
+%% modify the notification's content before delivery.
+%% @end
+%%------------------------------------------------------------------------------
+-spec set_mutable_content(boolean(), map()) -> map().
+set_mutable_content(MutableContent, Payload) ->
+    kz_maps:put([?KEY_APS, <<"mutable-content">>]
+               ,Payload
+               ,to_integer(MutableContent)
+               ).
+
+-spec to_integer(boolean()) -> 0 | 1.
+to_integer('true') -> 1;
+to_integer('false') -> 0.

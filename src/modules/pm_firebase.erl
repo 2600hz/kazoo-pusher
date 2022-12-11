@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2010-2021, 2600Hz
+%%% @copyright (C) 2010-2022, 2600Hz
 %%% @doc
 %%% This Source Code Form is subject to the terms of the Mozilla Public
 %%% License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -27,12 +27,33 @@
 -record(state, {tab :: ets:tid()}).
 -type state() :: #state{}.
 
--define(FIREBASE_MAP, [{<<"Alert-Key">>, [<<"alert">>, <<"loc-key">>]}
-                      ,{<<"Alert-Params">>, [<<"alert">>, <<"loc-args">>]}
-                      ,{<<"Sound">>, [<<"sound">>]}
-                      ,{<<"Call-ID">>, [<<"Call-ID">>]}
-                      ,{<<"Payload">>, fun kz_json:merge/2}
-                      ]).
+-define(KEY_DATA, <<"data">>).
+-define(KEY_NOTIFICATION, <<"notification">>).
+
+-define(PAYLOAD_MAP, #{<<"Alert">> => #{<<"Title">> => [?KEY_NOTIFICATION, <<"title">>]
+                                       ,<<"Subtitle">> => [?KEY_NOTIFICATION, <<"subtitle">>]
+                                       ,<<"Body">> => [?KEY_NOTIFICATION, <<"body">>]
+                                       ,<<"Title-Key">> => [?KEY_NOTIFICATION, <<"title_loc_key">>]
+                                       ,<<"Title-Params">> => [?KEY_NOTIFICATION, <<"title_loc_args">>]
+                                       ,<<"Body-Key">> => [?KEY_NOTIFICATION, <<"body_loc_key">>]
+                                       ,<<"Body-Params">> => [?KEY_NOTIFICATION, <<"body_loc_args">>]
+                                       }
+                      ,<<"Badge">> => fun set_badge/2
+                      ,<<"Category">> => [?KEY_NOTIFICATION, <<"click_action">>]
+                      ,<<"Collapse-ID">> => <<"collapse_key">>
+                      ,<<"Content-Available">> => <<"content_available">>
+                      ,<<"Content-Mutable">> => <<"mutable_content">>
+                      ,<<"FCM">> => #{<<"Android">> => #{<<"Channel-ID">> => [?KEY_NOTIFICATION, <<"android_channel_id">>]
+                                                        ,<<"Color">> => [?KEY_NOTIFICATION, <<"color">>]
+                                                        ,<<"Icon">> => [?KEY_NOTIFICATION, <<"icon">>]
+                                                        ,<<"Tag">> => [?KEY_NOTIFICATION, <<"tag">>]
+                                                        }}
+                      ,<<"Priority">> => fun set_priority/2
+                      ,<<"Sound">> => [?KEY_NOTIFICATION, <<"sound">>]
+                      ,<<"TTL">> => <<"time_to_live">>
+                           %% For `push_req` backwards-compatibility
+                      ,<<"Call-ID">> => [?KEY_DATA, <<"Call-ID">>]
+                      }).
 
 -spec start_link() -> kz_types:startlink_ret().
 start_link() ->
@@ -49,10 +70,9 @@ handle_call(_Request, _From, State) ->
     {'reply', {'error', 'not_implemented'}, State}.
 
 -spec handle_cast(any(), state()) -> kz_types:handle_cast_ret_state(state()).
-handle_cast({'push', JObj}, #state{tab=ETS}=State) ->
-    lager:debug("process a push"),
-    TokenApp = kz_json:get_value(<<"Token-App">>, JObj),
-    maybe_send_push_notification(get_fcm(TokenApp, ETS), JObj),
+handle_cast({'push', Token, TokenApp, JObj}, #state{tab=ETS}=State) ->
+    kz_log:put_callid(JObj),
+    maybe_send_push_notification(get_fcm(TokenApp, ETS), Token, JObj),
     {'noreply', State};
 handle_cast('stop', State) ->
     {'stop', 'normal', State}.
@@ -70,46 +90,55 @@ terminate(_Reason, #state{tab=ETS}) ->
 code_change(_OldVsn, State, _Extra) ->
     {'ok', State}.
 
--spec maybe_send_push_notification(push_app(), kz_json:object()) -> 'ok'.
-maybe_send_push_notification('undefined', _JObj) -> lager:debug("no pid to send push");
-maybe_send_push_notification({Pid, Envelope}, JObj) ->
-    TokenID = kz_json:get_value(<<"Token-ID">>, JObj),
-    MessageJObj = kz_json:from_list([{<<"data">>, build_payload(JObj)}]),
-    Message = kz_maps:merge(kz_json:to_map(MessageJObj), Envelope),
+%%%=============================================================================
+%%% Internal functions
+%%%=============================================================================
+
+%%------------------------------------------------------------------------------
+%% @doc Send the push notification if an FCM worker is running.
+%% @end
+%%------------------------------------------------------------------------------
+-spec maybe_send_push_notification(push_app(), kz_term:ne_binary(), kz_json:object()) -> 'ok'.
+maybe_send_push_notification('undefined', _, _) ->
+    lager:debug("no pid to send push"),
+    'ok';
+maybe_send_push_notification({Pid, Envelope}, TokenID, JObj) ->
+    {CustomData, JObj1} = pusher_module_util:extract_custom_data(JObj),
+
+    Message = build_message(JObj1, CustomData, Envelope),
 
     lager:debug("pushing to ~p: ~s: ~p", [Pid, TokenID, Message]),
 
     fcm:push(Pid, [TokenID], Message).
 
--spec build_payload(kz_json:object()) -> kz_json:object().
-build_payload(JObj) ->
-    kz_json:foldl(fun map_key/3, kz_json:new(), JObj).
+%%------------------------------------------------------------------------------
+%% @doc Build the FCM message payload.
+%% @end
+%%------------------------------------------------------------------------------
+-spec build_message(kz_json:object(), map(), map()) -> map().
+build_message(JObj, CustomData, Envelope) ->
+    FlatProps = kz_json:to_proplist(kz_json:flatten(JObj)),
+    Message = pusher_module_util:build_payload(
+                FlatProps, JObj, ?PAYLOAD_MAP, #{?KEY_DATA => CustomData}
+               ),
+    kz_maps:merge(Message, Envelope).
 
--spec map_key(term(), term(), kz_json:object()) -> kz_json:object().
-map_key(K, V, JObj) ->
-    case lists:keyfind(K, 1, ?FIREBASE_MAP) of
-        'false' -> JObj;
-        {_, Fun} when is_function(Fun, 2) -> Fun(V, JObj);
-        {_, K1} -> kz_json:set_value(K1, V, JObj)
-    end.
-
--spec get_fcm(kz_term:api_binary(), ets:tid()) -> push_app().
-get_fcm('undefined', _) -> 'undefined';
+-spec get_fcm(kz_term:ne_binary(), ets:tid()) -> push_app().
 get_fcm(App, ETS) ->
     case ets:lookup(ETS, App) of
         [] -> maybe_load_fcm(App, ETS);
         [{App, Push}] -> Push
     end.
 
--spec maybe_load_fcm(kz_term:api_binary(), ets:tid()) -> push_app().
+-spec maybe_load_fcm(kz_term:ne_binary(), ets:tid()) -> push_app().
 maybe_load_fcm(App, ETS) ->
     lager:debug("loading fcm secret for ~s", [App]),
-    FCMSecret = kapps_config:get_binary(?CONFIG_CAT, [<<"firebase">>, <<"api_key">>], <<>>, App),
-    EnvelopeJObj = kapps_config:get_json(?CONFIG_CAT, [<<"firebase">>, <<"headers">>], kz_json:new(), App),
+    FCMSecret = kapps_config:get_binary(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE, <<"api_key">>], <<>>, App),
+    EnvelopeJObj = kapps_config:get_json(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE, <<"headers">>], kz_json:new(), App),
     Envelope = kz_json:to_map(EnvelopeJObj),
     maybe_load_fcm(App, ETS, FCMSecret, Envelope).
 
--spec maybe_load_fcm(kz_term:api_binary(), ets:tid(), binary(), map()) -> push_app().
+-spec maybe_load_fcm(kz_term:ne_binary(), ets:tid(), binary(), map()) -> push_app().
 maybe_load_fcm(App, _ETS, <<>>, _Envelope) ->
     lager:debug("firebase pusher api_key for app ~s not found", [App]),
     'undefined';
@@ -125,3 +154,27 @@ maybe_load_fcm(App, ETS, APIKey, Envelope) ->
             lager:error("error loading fcm ~p", [Reason]),
             'undefined'
     end.
+
+%%------------------------------------------------------------------------------
+%% @doc Set the home screen badge value.
+%% @end
+%%------------------------------------------------------------------------------
+-spec set_badge(integer(), map()) -> map().
+set_badge(Badge, Payload) ->
+    kz_maps:put([?KEY_NOTIFICATION, <<"badge">>]
+               ,Payload
+               ,kz_term:to_binary(Badge)
+               ).
+
+%%------------------------------------------------------------------------------
+%% @doc Set the message delivery priority.
+%% @end
+%%------------------------------------------------------------------------------
+-spec set_priority(kz_term:ne_binary(), map()) -> map().
+set_priority(PriorityBin, Payload) ->
+    Priority = adjusted_priority(PriorityBin),
+    Payload#{<<"priority">> => Priority}.
+
+-spec adjusted_priority(kz_term:ne_binary()) -> kz_term:ne_binary().
+adjusted_priority(<<"low">>) -> <<"normal">>;
+adjusted_priority(Priority) -> Priority.

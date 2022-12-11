@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2010-2020, 2600Hz
+%%% @copyright (C) 2010-2022, 2600Hz
 %%% @doc
 %%% @author Luis Azedo
 %%%
@@ -17,6 +17,7 @@
 
 -export([binary_to_keycert/1]).
 -export([user_agent_push_properties/1]).
+-export([timestamp_ms/1]).
 
 -include("pusher.hrl").
 
@@ -82,3 +83,7 @@ user_agent_push_properties(UserAgent, [JObj|UAs]) ->
         _ ->
             kz_json:get_value(<<"properties">>, JObj, kz_json:new())
     end.
+
+-spec timestamp_ms(kz_json:object()) -> kz_term:api_integer().
+timestamp_ms(JObj) ->
+    kz_json:get_integer_value(?KEY_TIMESTAMP_MS, JObj).
