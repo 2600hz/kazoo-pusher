@@ -32,7 +32,6 @@ start(_Type, _Args) ->
 stop(_State) ->
     'ok'.
 
-
 -spec declare_exchanges() -> 'ok'.
 declare_exchanges() ->
     _ = kapi_notifications:declare_exchanges(),
