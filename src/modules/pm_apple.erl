@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2010-2022, 2600Hz
+%%% @copyright (C) 2010-2023, 2600Hz
 %%% @doc
 %%% This Source Code Form is subject to the terms of the Mozilla Public
 %%% License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -77,14 +77,14 @@ init([]) ->
     {'ok', #state{tab=ets:new(?MODULE, [])}}.
 
 -spec handle_call(any(), kz_term:pid_ref(), state()) -> kz_types:handle_call_ret_state(state()).
+handle_call({'push', Token, TokenApp, JObj}, _From, #state{tab=ETS}=State) ->
+    kz_log:put_callid(JObj),
+    Reply = maybe_send_push_notification(get_apns(TokenApp, ETS), Token, TokenApp, JObj),
+    {'reply', Reply, State};
 handle_call(_Request, _From, State) ->
     {'reply', {'error', 'not_implemented'}, State}.
 
 -spec handle_cast(any(), state()) -> kz_types:handle_cast_ret_state(state()).
-handle_cast({'push', Token, TokenApp, JObj}, #state{tab=ETS}=State) ->
-    kz_log:put_callid(JObj),
-    maybe_send_push_notification(get_apns(TokenApp, ETS), Token, TokenApp, JObj),
-    {'noreply', State};
 handle_cast('stop', State) ->
     {'stop', 'normal', State};
 handle_cast(_Msg, State) ->
@@ -146,8 +146,9 @@ log_headers(Headers) ->
                                   ,kz_term:ne_binary()
                                   ,kz_term:ne_binary()
                                   ,kz_json:object()
-                                  ) -> 'ok'.
-maybe_send_push_notification('undefined', _, _, _) -> 'ok';
+                                  ) -> pusher_result:t().
+maybe_send_push_notification('undefined', _, _, _) ->
+    pusher_result:internal_server_error(<<"No APNs connection">>);
 maybe_send_push_notification({Pid, ExtraHeaders}, Token, TokenApp, JObj) ->
     JObj1 = maybe_set_apns_topic(TokenApp, JObj),
     {CustomData, JObj2} = pusher_module_util:extract_custom_data(JObj1),
@@ -166,11 +167,12 @@ maybe_send_push_notification({Pid, ExtraHeaders}, Token, TokenApp, JObj) ->
     try
         Result = apns:push_notification(Pid, Token, Msg, Headers),
         lager:debug_unsafe("apns result for ~s : ~p", [TokenApp, Result]),
-        'ok'
+        to_pusher_result(Result)
     catch
         ?CATCH(Ex, Msg, _ST) ->
             lager:error_unsafe("PUBLISH ERROR => ~p / ~p", [Ex, Msg]),
-            ?LOGSTACK(_ST)
+            ?LOGSTACK(_ST),
+            pusher_result:internal_server_error(<<"Failed to push notification">>)
     end.
 
 %%------------------------------------------------------------------------------
@@ -341,6 +343,93 @@ set_mutable_content(MutableContent, Payload) ->
                ,Payload
                ,to_integer(MutableContent)
                ).
+
+%%------------------------------------------------------------------------------
+%% @doc Convert an APNs response into a `pusher_result'.
+%% @end
+%%------------------------------------------------------------------------------
+-spec to_pusher_result(apns:response()) -> pusher_result:t().
+to_pusher_result({200, _, _}) -> pusher_result:success();
+to_pusher_result({RespCode, _, Data}) ->
+    Reason = props:get_ne_binary_value(<<"reason">>, Data),
+    ErrorMessage = push_error_message(Reason),
+    case resp_code_override(Reason) of
+        'undefined' ->
+            pusher_result:new(RespCode, Reason, ErrorMessage);
+        RespCodeOverride ->
+            pusher_result:new(RespCodeOverride, Reason, ErrorMessage)
+    end;
+to_pusher_result('timeout') ->
+    pusher_result:gateway_timeout(<<"Timed out communicating with APNs">>).
+
+%%------------------------------------------------------------------------------
+%% @doc Get the error message corresponding to an APNs response error code. See
+%% [https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/handling_notification_responses_from_apns].
+%% @end
+%%------------------------------------------------------------------------------
+-spec push_error_message(kz_term:ne_binary()) -> kz_term:ne_binary().
+push_error_message(<<"BadCollapseId">>) ->
+    <<"The collapse identifier exceeds the maximum allowed size.">>;
+push_error_message(<<"BadDeviceToken">>) -> <<"The specified device token is invalid.">>;
+push_error_message(<<"BadExpirationDate">>) -> <<"The TTL value is invalid.">>;
+push_error_message(<<"BadMessageId">>) -> <<"The `apns-id` value is invalid.">>;
+push_error_message(<<"BadPriority">>) -> <<"The priority value is invalid.">>;
+push_error_message(<<"BadTopic">>) -> <<"The APNs topic value is invalid.">>;
+push_error_message(<<"DeviceTokenNotForTopic">>) ->
+    <<"The device token doesn't match the specified topic.">>;
+push_error_message(<<"DuplicateHeaders">>) -> <<"One or more headers are repeated.">>;
+push_error_message(<<"IdleTimeout">>) -> <<"Idle timeout.">>;
+push_error_message(<<"InvalidPushType">>) -> <<"The APNs push type value is invalid.">>;
+push_error_message(<<"MissingDeviceToken">>) ->
+    <<"The device token isn't specified in the request.">>;
+push_error_message(<<"MissingTopic">>) ->
+    <<"The APNs topic header of the request isn't specified and is required.">>;
+push_error_message(<<"PayloadEmpty">>) -> <<"The message payload is empty.">>;
+push_error_message(<<"TopicDisallowed">>) -> <<"Pushing to this topic is not allowed.">>;
+push_error_message(<<"BadCertificate">>) -> <<"The certificate is invalid.">>;
+push_error_message(<<"BadCertificateEnvironment">>) ->
+    <<"The client certificate is for the wrong environment.">>;
+push_error_message(<<"ExpiredProviderToken">>) ->
+    <<"The provider token is stale and a new token should be generated.">>;
+push_error_message(<<"Forbidden">>) -> <<"The specified action is not allowed.">>;
+push_error_message(<<"InvalidProviderToken">>) ->
+    <<"The provider token is not valid, or the token signature can't be verified.">>;
+push_error_message(<<"MissingProviderToken">>) ->
+    <<"The `authorization` header is missing or no provider token is specified.">>;
+push_error_message(<<"BadPath">>) -> <<"The request contained an invalid path value.">>;
+push_error_message(<<"MethodNotAllowed">>) -> <<"The specified method value isn't `POST`.">>;
+push_error_message(<<"ExpiredToken">>) -> <<"The device token has expired.">>;
+push_error_message(<<"Unregistered">>) ->
+    <<"The device token is inactive for the specified topic.">>;
+push_error_message(<<"PayloadTooLarge">>) -> <<"The message payload is too large.">>;
+push_error_message(<<"TooManyProviderTokenUpdates">>) ->
+    <<"The provider's authentication token is being updated too often.">>;
+push_error_message(<<"TooManyRequests">>) ->
+    <<"Too many requests were made consecutively to the same device token.">>;
+push_error_message(<<"InternalServerError">>) -> <<"An internal server error occurred.">>;
+push_error_message(<<"ServiceUnavailable">>) -> <<"The service is unavailable.">>;
+push_error_message(<<"Shutdown">>) -> <<"The APNs server is shutting down.">>.
+
+%%------------------------------------------------------------------------------
+%% @doc Get an overridden response code from an APNs response error code when
+%% there is a more appropriate one for returning to the push notification
+%% requestor. For example, some can be overridden with 500s, since they would
+%% indicate issues with the `pusher' implementation.
+%% @end
+%%------------------------------------------------------------------------------
+-spec resp_code_override(kz_term:ne_binary()) -> kz_term:api_pos_integer().
+resp_code_override(<<"DuplicateHeaders">>) ->
+    lager:error("duplicate headers included in request"),
+    500;
+resp_code_override(<<"IdleTimeout">>) ->
+    500;
+resp_code_override(<<"BadPath">>) ->
+    lager:error("request contained invalid `:path` value"),
+    500;
+resp_code_override(<<"MethodNotAllowed">>) ->
+    lager:error("request method was not `POST`"),
+    500;
+resp_code_override(_) -> 'undefined'.
 
 -spec to_integer(boolean()) -> 0 | 1.
 to_integer('true') -> 1;

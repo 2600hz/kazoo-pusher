@@ -92,6 +92,7 @@ Key                          | Type                              | Default  | Re
 
 - <https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/generating_a_remote_notification>
 - <https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/sending_notification_requests_to_apns>
+- <https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/handling_notification_responses_from_apns>
 - payload limit: 5120 bytes for VoIP notifications, 4096 bytes for all other remote notifications
 
 ```

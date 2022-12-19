@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2013-2022, 2600Hz
+%%% @copyright (C) 2013-2023, 2600Hz
 %%% @doc
 %%% @author Luis Azedo
 %%%
@@ -63,21 +63,18 @@
 -define(CONSUME_OPTIONS, [{'exclusive', 'false'}]).
 
 -type maybe_pm_module() :: module() | 'undefined'.
+-type endpoint_id() :: kz_term:ne_binary().
 -type endpoint_type() :: 'device' | 'user'.
 %% A tuple containing a token, token app, and token type.
 -type push_props() :: {kz_term:api_ne_binary(), kz_term:api_ne_binary(), token_type()}.
 -type token_type() :: kz_term:api_ne_binary().
 
--type device_fetch_error() :: kz_datamgr:data_errors() | 'invalid_parameters'.
+-type device_fetch_error() :: {endpoint_id()
+                              ,kz_datamgr:data_errors() | 'invalid_parameters'
+                              }.
 -type device_fetch_result() :: kz_either:either(device_fetch_error(), kzd_devices:doc()).
 -type device_fetch_results() :: [device_fetch_result()].
--type push_result() :: kz_either:either(target_push_error()
-                                       ,target_push_success() | 'not_push_device'
-                                       ).
--type push_results() :: [device_fetch_result() | push_result()].
--type target_push_error() :: 'missing_mandatory_properties' | 'unknown_token_type'.
--type target_push_success() :: 'app_disabled' | 'sent'.
--type target_push_result() :: kz_either:either(target_push_error(), target_push_success()).
+-type pusher_results() :: [pusher_result:identified_t()].
 
 %%%=============================================================================
 %%% API
@@ -93,8 +90,8 @@ handle_endpoint_push(JObj, _Props) ->
     'true' = kapi_pusher:endpoint_push_req_v(JObj),
     JObj1 = add_timestamp_to_req(JObj),
     DeviceResults = fetch_devices(JObj1),
-    _ = push_to_devices(JObj1, DeviceResults),
-    'ok'.
+    Results = push_to_devices(JObj1, DeviceResults),
+    maybe_publish_endpoint_push_resp(JObj, Results).
 
 %%------------------------------------------------------------------------------
 %% @doc Handle a legacy request to push to a push-enabled device.
@@ -171,7 +168,7 @@ maybe_update_push_token(AccountId, AuthorizingId, UA, JObj, Params) ->
                     lager:debug("push not changed : ~s", [kz_json:encode(Push)]);
                 'false' ->
                     lager:debug("setting push object for ~s: ~s: ~s", [AccountId, AuthorizingId, kz_json:encode(NewPush)]),
-                    case kz_datamgr:save_doc(AccountDb, kz_json:set_value(<<"push">>, NewPush, Doc)) of
+                    case kz_datamgr:save_doc(AccountDb, kzd_devices:set_push(NewPush, Doc)) of
                         {'ok', _} -> lager:debug("push object for ~s: ~s updated successfuly", [AccountId, AuthorizingId]);
                         {'error', _Err} -> lager:warning("push object for ~s: ~s was not updated => ~p", [AccountId, AuthorizingId, _Err])
                     end
@@ -309,7 +306,7 @@ fetch_devices(JObj) ->
     EndpointType = endpoint_type(JObj),
     fetch_devices(AccountId, EndpointId, EndpointType).
 
--spec fetch_devices(kz_term:ne_binary(), kz_term:ne_binary(), endpoint_type()) ->
+-spec fetch_devices(kz_term:ne_binary(), endpoint_id(), endpoint_type()) ->
           device_fetch_results().
 fetch_devices(AccountId, DeviceId, 'device') ->
     case kzd_devices:fetch(AccountId, DeviceId) of
@@ -321,11 +318,11 @@ fetch_devices(AccountId, DeviceId, 'device') ->
             %% Not treating missing device as an error - device might have been
             %% deleted since req was submitted
             [];
-        {'error', E}=Ret ->
+        {'error', E} ->
             lager:error("failed to fetch device '~s' in account '~s': ~p"
                        ,[DeviceId, AccountId, E]
                        ),
-            [Ret]
+            [{'error', {DeviceId, E}}]
     end;
 fetch_devices(AccountId, UserId, 'user') ->
     Devices = kz_attributes:owned_by_docs(UserId, <<"device">>, AccountId),
@@ -347,35 +344,43 @@ endpoint_type(JObj) ->
 %% through. Devices without push configuration are ignored.
 %% @end
 %%------------------------------------------------------------------------------
--spec push_to_devices(kz_json:object(), device_fetch_results()) -> push_results().
+-spec push_to_devices(kz_json:object(), device_fetch_results()) -> pusher_results().
 push_to_devices(JObj, DeviceResults) ->
-    [kz_either:bind(DeviceResult
+    [kz_either:cata(DeviceResult
+                   ,fun to_push_error/1
                    ,fun(Device) -> maybe_push_to_device(JObj, Device) end
                    )
      || DeviceResult <- DeviceResults
     ].
 
--spec maybe_push_to_device(kz_json:object(), kzd_devices:doc()) -> push_result().
+-spec to_push_error(device_fetch_error()) -> pusher_result:identified_t().
+to_push_error({DeviceId, FetchError}) ->
+    Message = kz_term:to_binary(io_lib:format("~p", [FetchError])),
+    pusher_result:identify(DeviceId
+                          ,pusher_result:internal_server_error(Message)
+                          ).
+
+-spec maybe_push_to_device(kz_json:object(), kzd_devices:doc()) -> pusher_result:identified_t().
 maybe_push_to_device(JObj, Device) ->
-    case kzd_devices:push(Device) of
-        'undefined' ->
-            %% Ignore device that aren't configured for push
-            {'ok', 'not_push_device'};
-        Push ->
-            maybe_push_to_target(JObj, push_props(Push))
-    end.
+    Result = case kzd_devices:push(Device) of
+                 'undefined' ->
+                     %% Ignore devices that aren't configured for push
+                     pusher_result:success(<<"Not push device">>);
+                 Push -> maybe_push_to_target(JObj, push_props(Push))
+             end,
+    pusher_result:identify(kz_doc:id(Device), Result).
 
 %%------------------------------------------------------------------------------
 %% @doc Push to a push-enabled target using token information. Token information
 %% is validated before sending the push.
 %% @end
 %%------------------------------------------------------------------------------
--spec maybe_push_to_target(kz_json:object(), push_props()) -> target_push_result().
+-spec maybe_push_to_target(kz_json:object(), push_props()) -> pusher_result:t().
 maybe_push_to_target(_, {Token, TokenApp, TokenType}) when Token =:= 'undefined';
                                                            TokenApp =:= 'undefined';
                                                            TokenType =:= 'undefined' ->
     lager:error("missing mandatory push properties"),
-    {'error', 'missing_mandatory_properties'};
+    pusher_result:bad_request(<<"Missing mandatory push properties">>);
 maybe_push_to_target(JObj, {Token, TokenApp, TokenType}) ->
     AppEnabled = app_enabled(TokenApp, TokenType),
     Module = pm_module(TokenType),
@@ -384,13 +389,13 @@ maybe_push_to_target(JObj, {Token, TokenApp, TokenType}) ->
     case whereis(Module) of
         'undefined' ->
             lager:error("pm module not available for token type ~s", [TokenType]),
-            {'error', 'unknown_token_type'};
+            pusher_result:bad_request(<<"Token type unknown">>);
         _ when not AppEnabled ->
             lager:debug("app ~s is disabled", [TokenApp]),
-            {'ok', 'app_disabled'};
+            pusher_result:success(<<"App disabled">>);
         Pid ->
             lager:debug("pushing for token ~s(~s) to module ~s", [Token, TokenType, Module]),
-            {gen_server:cast(Pid, {'push', Token, TokenApp, JObj}), 'sent'}
+            gen_server:call(Pid, {'push', Token, TokenApp, JObj})
     end.
 
 %%------------------------------------------------------------------------------
@@ -488,3 +493,75 @@ push_props(JObj) ->
     TokenApp = kz_json:get_ne_binary_value(<<"Token-App">>, JObj),
     TokenType = kz_json:get_ne_binary_value(<<"Token-Type">>, JObj),
     {Token, TokenApp, TokenType}.
+
+%%------------------------------------------------------------------------------
+%% @doc Publish a response to an `endpoint_push_req' if there is a response
+%% queue to send it to.
+%% @end
+%%------------------------------------------------------------------------------
+-spec maybe_publish_endpoint_push_resp(kz_json:object(), pusher_results()) -> 'ok'.
+maybe_publish_endpoint_push_resp(Req, Results) ->
+    maybe_publish_endpoint_push_resp(
+      kz_api:server_id(Req), kz_api:msg_id(Req), Results
+     ).
+
+-spec maybe_publish_endpoint_push_resp(kz_term:api_ne_binary()
+                                      ,kz_term:api_ne_binary()
+                                      ,pusher_results()
+                                      ) -> 'ok'.
+maybe_publish_endpoint_push_resp('undefined', _, Results) ->
+    lager:debug("push results: ~p", [Results]);
+maybe_publish_endpoint_push_resp(ServerId, MsgId, Results) ->
+    EndpointPushRespResults = [to_endpoint_push_resp_result(Result)
+                               || Result <- Results
+                              ],
+    Resp = [{<<"Overall-Status">>, overall_status(Results)}
+           ,{<<"Results">>, EndpointPushRespResults}
+           ,{<<"Msg-ID">>, MsgId}
+           | kz_api:default_headers(?APP_NAME, ?APP_VERSION)
+           ],
+    kapi_pusher:publish_endpoint_push_resp(ServerId, Resp).
+
+%%------------------------------------------------------------------------------
+%% @doc Convert a `pusher_result:identified_t()' into a single result in an
+%% `endpoint_push_resp'. Error details will be conditionally added for error
+%% results.
+%% @end
+%%------------------------------------------------------------------------------
+-spec to_endpoint_push_resp_result(pusher_result:identified_t()) -> kz_json:object().
+to_endpoint_push_resp_result({DeviceId, RespCode, Reason, Message}) ->
+    Result = kz_json:from_list([{<<"Device-ID">>, DeviceId}
+                               ,{<<"Status">>, RespCode}
+                               ,{<<"Message">>, Message}
+                               ]),
+    case RespCode of
+        200 -> Result;
+        _ -> kz_json:set_value(<<"Error">>, Reason, Result)
+    end.
+
+%%------------------------------------------------------------------------------
+%% @doc Get the overall status from endpoint push results.
+%% @end
+%%------------------------------------------------------------------------------
+-spec overall_status(pusher_results()) -> pos_integer().
+overall_status(Results) ->
+    RespCodesWithPriorities = [{resp_code_priority(RespCode), RespCode}
+                               || {_, RespCode, _, _} <- Results
+                              ],
+    case RespCodesWithPriorities of
+        [] ->
+            %% No pushes were sent, this is OK
+            %% User might have no enabled devices, device was not found, etc.
+            200;
+        _ ->
+            %% Term order will give us the most relevant resp code, first by
+            %% priority then minimum resp code. Should be decent - bad requests
+            %% & authz failures before system and possible implementation errors
+            {_, RespCode} = lists:min(RespCodesWithPriorities),
+            RespCode
+    end.
+
+-spec resp_code_priority(pos_integer()) -> pos_integer().
+resp_code_priority(RespCode) when RespCode >= 400 -> 1;
+resp_code_priority(RespCode) when RespCode > 200 -> 2;
+resp_code_priority(_) -> 3.

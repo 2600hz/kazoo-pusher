@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2013-2022, 2600Hz
+%%% @copyright (C) 2013-2023, 2600Hz
 %%% @doc Maintenance functions for all
 %%% @author Luis Azedo
 %%%
@@ -42,7 +42,7 @@ add_apple_app(AppId, Certfile, Host) ->
 -spec push(kz_term:ne_binary(), kz_term:ne_binary()) -> 'ok'.
 push(AccountId, DeviceId) ->
     case kzd_devices:fetch(AccountId, DeviceId) of
-        {'ok', Device} -> push(kz_json:get_json_value(<<"push">>, Device));
+        {'ok', Device} -> push(kzd_devices:push(Device));
         {'error', Error} -> io:format("error: ~p~n", [Error])
     end.
 
