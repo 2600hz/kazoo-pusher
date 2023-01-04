@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2022, 2600Hz
+%%% @copyright (C) 2023, 2600Hz
 %%% @doc `pusher_module_util' tests
 %%%
 %%% This Source Code Form is subject to the terms of the Mozilla Public
