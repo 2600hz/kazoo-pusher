@@ -114,6 +114,28 @@ In order for the push services from Apple / Firebase to work they need to be con
 6. Save as .p12 format.
 7. Execute `openssl pkcs12 -in ${CERT_NAME}.p12 -out ${CERT_NAME}.pem -clcerts -nodes` to export the certificate and private key as a .pem file. The private key must be unencrypted, hence the `-nodes` flag.
 
+### Rules for Firewall Allow Lists
+
+#### Apple Push Notification service (APNs)
+
+* <https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/sending_notification_requests_to_apns>
+  * [api.sandbox.push.apple.com:443](https://api.sandbox.push.apple.com:443) (only required if overriding the default APNs host to use the sandbox)
+  * [api.push.apple.com:443](https://api.push.apple.com:443)
+  * Uses long-lived TLS 1.2-encrypted HTTP/2 connections - **do not** terminate idle connections
+  * >You can also use port 2197 (instead of port 443) on either server when communicating with APNs. You might use this port to allow APNs traffic through your firewall but to block other HTTPS traffic.
+    * pusher **does not** currently support this alternate port
+* [Troubleshoot Problems with Receiving Notifications](https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/handling_notification_responses_from_apns#3394526)
+  * >Devices connecting to APNs over Wi-Fi need to allow inbound and outbound TCP packets over port 5223, falling back to port 443 if port 5223 is unavailable.
+    * Applies to **clients** (Apple devices) receiving the push notifications - you **do not** need to open these ports on your pusher nodes
+
+#### Firebase Cloud Messaging (FCM)
+
+* <https://firebase.google.com/docs/cloud-messaging/http-server-ref>
+  * <https://fcm.googleapis.com/fcm/send> (standard port 443)
+  * HTTP `POST`
+  * Uses 1 short-lived connection per push notification
+* [FCM ports and your firewall](https://firebase.google.com/docs/cloud-messaging/concept-options#messaging-ports-and-your-firewall) details open ports/hostnames needed by the **clients** (e.g. Android devices) receiving the messages - you **do not** need to open these ports/hostnames on your pusher nodes
+
 ## Pusher Summary by Karl
 
 The full sequence is expected to be four parts.
