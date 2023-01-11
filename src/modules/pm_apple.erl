@@ -166,7 +166,7 @@ maybe_send_push_notification({Pid, ExtraHeaders}, Token, TokenApp, JObj) ->
                        ]),
     try
         Result = apns:push_notification(Pid, Token, Msg, Headers),
-        lager:debug_unsafe("apns result for ~s : ~p", [TokenApp, Result]),
+        lager:debug("apns result for ~s : ~p", [TokenApp, Result]),
         to_pusher_result(Result)
     catch
         ?CATCH(Ex, Msg, _ST) ->
@@ -187,7 +187,16 @@ maybe_send_push_notification({Pid, ExtraHeaders}, Token, TokenApp, JObj) ->
                    ) -> map().
 build_headers(FlatProps, JObj, MsgId, ExtraHeaders) ->
     Headers = pusher_module_util:build_payload(FlatProps, JObj, ?HEADER_MAP, #{}),
-    kz_maps:merge(Headers#{apns_id => MsgId}, ExtraHeaders).
+    %% APNs only accepts a canonical 8-4-4-4-12 UUID for `apns-id', returns a
+    %% `400' for other formats
+    Headers1 = case kz_term:is_rfc4122_uuid(MsgId) of
+                   'true' -> Headers#{apns_id => MsgId};
+                   'false' ->
+                       %% Leave APNs to generate the `apns-id' and return it in
+                       %% the result
+                       Headers
+               end,
+    kz_maps:merge(Headers1, ExtraHeaders).
 
 %%------------------------------------------------------------------------------
 %% @doc Build the APNs message payload.
