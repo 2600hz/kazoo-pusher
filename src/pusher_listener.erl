@@ -131,7 +131,7 @@ maybe_process_reg_success(UA, JObj) ->
     Params = A ++ B,
     TokenKey = kz_json:get_value(?TOKEN_KEY, UA),
     Token = props:get_value(TokenKey, Params),
-    maybe_process_reg_success(Token, add_proxy_keys(UA) , JObj, Params).
+    maybe_process_reg_success(Token, add_proxy_keys(UA), JObj, Params).
 
 add_proxy_keys(UA) ->
     KVs = [{<<"Token-Proxy">>, ?TOKEN_PROXY_KEY}
@@ -168,7 +168,7 @@ maybe_update_push_token(AccountId, AuthorizingId, UA, JObj, Params) ->
                     lager:debug("push not changed : ~s", [kz_json:encode(Push)]);
                 'false' ->
                     lager:debug("setting push object for ~s: ~s: ~s", [AccountId, AuthorizingId, kz_json:encode(NewPush)]),
-                    case kz_datamgr:save_doc(AccountDb, kzd_devices:set_push(NewPush, Doc)) of
+                    case kz_datamgr:save_doc(AccountDb, kzd_devices:set_push(Doc, NewPush)) of
                         {'ok', _} -> lager:debug("push object for ~s: ~s updated successfuly", [AccountId, AuthorizingId]);
                         {'error', _Err} -> lager:warning("push object for ~s: ~s was not updated => ~p", [AccountId, AuthorizingId, _Err])
                     end
