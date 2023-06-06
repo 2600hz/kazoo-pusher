@@ -37,6 +37,7 @@
 -define(QUEUE_NAME, <<"pusher_voicemail_listener">>).
 -define(QUEUE_OPTIONS, [{'exclusive', 'false'}]).
 -define(CONSUME_OPTIONS, [{'exclusive', 'false'}]).
+-define(PUSH_TYPE, <<"voicemail">>).
 
 %%%=============================================================================
 %%% API
@@ -195,7 +196,8 @@ generate_push_payload(JObj) ->
     PresenceId = kz_json:get_ne_binary_value(<<"Presence-ID">>, JObj),
     CallId = kz_json:get_ne_binary_value(<<"Call-ID">>, JObj),
 
-    Payload = [{<<"To">>, ToUser}
+    Payload = [{<<"Push_Type">>, ?PUSH_TYPE}
+              ,{<<"To">>, ToUser}
               ,{<<"Messages-New">>, New}
               ,{<<"Messages-Saved">>, Saved}
               ,{<<"Extended-Presence-ID">>, PresenceId}
@@ -217,8 +219,12 @@ maybe_push_to_device(PushJObj, Device) ->
     %% if push object
     case kz_json:get_json_value([<<"doc">>, <<"push">>], Device) of
         'undefined' -> 'ok';
-        DevicePushJObj -> push_to_device(PushJObj, DevicePushJObj)
+        DevicePushJObj -> add_device_id_to_payload_and_push(PushJObj, DevicePushJObj, kz_doc:id(Device))
     end.
+
+add_device_id_to_payload_and_push(PushJObj, DevicePushJObj, DeviceId) ->
+    NewPushJObj = kz_json:set_values([{<<"Payload">>, <<"kazoo_device_id">>, DeviceId}], PushJObj),
+    push_to_device(NewPushJObj, DevicePushJObj).
 
 %% send Push notification
 push_to_device(PushJObj, DevicePushJObj) ->
