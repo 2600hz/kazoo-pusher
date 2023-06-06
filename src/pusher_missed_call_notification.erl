@@ -30,6 +30,7 @@
 -include("pusher.hrl").
 
 -define(SERVER, ?MODULE).
+-define(PUSH_TYPE, <<"missed_call">>).
 
 -record(state, {}).
 -type state() :: #state{}.
@@ -219,7 +220,8 @@ generate_push_payload(JObj) ->
     CallerIdNumber = kz_json:get_ne_binary_value(<<"Caller-ID-Number">>, JObj),
     CallerIdName = kz_json:get_ne_binary_value(<<"Caller-ID-Name">>, JObj),
 
-    Payload = [{<<"Call-ID">>, CallId}
+    Payload = [{<<"Push_Type">>, ?PUSH_TYPE}
+              ,{<<"Call-ID">>, CallId}
               ,{<<"Caller-ID-Number">>, CallerIdNumber}
               ,{<<"Caller-ID-Name">>, CallerIdName}
               ],
@@ -235,8 +237,12 @@ maybe_push_to_device(PushJObj, Device) ->
     %% if push object
     case kz_json:get_json_value([<<"doc">>, <<"push">>], Device) of
         'undefined' -> 'ok';
-        DevicePushJObj -> push_to_device(PushJObj, DevicePushJObj)
+        DevicePushJObj -> add_device_id_to_payload_and_push(PushJObj, DevicePushJObj, kz_doc:id(Device))
     end.
+
+add_device_id_to_payload_and_push(PushJObj, DevicePushJObj, DeviceId) ->
+    NewPushJObj = kz_json:set_values([{<<"Payload">>, <<"kazoo_device_id">>, DeviceId}], PushJObj),
+    push_to_device(NewPushJObj, DevicePushJObj).
 
 %% send Push notification
 push_to_device(PushJObj, DevicePushJObj) ->
