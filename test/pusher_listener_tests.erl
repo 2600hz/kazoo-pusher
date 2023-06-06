@@ -26,6 +26,7 @@ to_endpoint_push_req_test_() ->
     CallId = kz_binary:rand_hex(16),
     CIDName = <<"Bryan Mills">>,
     CIDNumber = <<"+15555555555">>,
+    PushType = <<"incoming_call">>,
     BodyKey = <<"IC_SIL">>,
     BodyParams = [<<CIDNumber/binary, " - ", CIDName/binary>>],
     Sound = <<"ring.caf">>,
@@ -37,6 +38,8 @@ to_endpoint_push_req_test_() ->
                                 ,{<<"proxy">>, <<"proxy">>}
                                 ,{<<"registration-token">>, kz_binary:rand_hex(16)}
                                 ,{<<"account-ref">>, kz_binary:rand_hex(16)}
+                                ,{<<"Kazoo-Device-Id">>, kz_binary:rand_hex(16)}
+                                ,{<<"Push-Type">>, PushType}
                                 ]),
 
     Req = kz_json:from_list(
@@ -88,7 +91,7 @@ to_endpoint_push_req_test_() ->
               EPReq1 = kz_json:delete_keys(props:get_keys(Values)
                                           ,pusher_listener:to_endpoint_push_req(Req1, PMMod)
                                           ),
-              ?assertEqual(EPReq, EPReq1)
+              ?assertEqual(EPReq, copy_unix_timestamp(EPReq, EPReq1))
       end
      }
     ].
@@ -98,3 +101,14 @@ add_unix_timestamp(EPReq, Data) ->
                      ,kz_term:to_binary(pusher_util:timestamp_ms(EPReq))
                      ,Data
                      ).
+
+copy_unix_timestamp(EPReq, EPReq1) ->
+    kz_json:set_values([{[<<"Data">>,<<"utc_unix_timestamp_ms">>]
+                        ,kz_json:get_binary_value([<<"Data">>,<<"utc_unix_timestamp_ms">>], EPReq)
+                        }
+                       ,{<<"Timestamp-MS">>
+                        ,kz_json:get_integer_value(<<"Timestamp-MS">>, EPReq)
+                        }
+                       ]
+                      ,EPReq1
+                      ).
