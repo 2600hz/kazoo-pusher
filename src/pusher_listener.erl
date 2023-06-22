@@ -366,7 +366,7 @@ maybe_push_to_device(JObj, Device) ->
                  'undefined' ->
                      %% Ignore devices that aren't configured for push
                      pusher_result:success(<<"Not push device">>);
-                 Push -> maybe_push_to_target(JObj, push_props(Push))
+                 Push -> maybe_push_to_target(add_kazoo_device_id(JObj, Device), push_props(Push))
              end,
     pusher_result:identify(kz_doc:id(Device), Result).
 
@@ -565,3 +565,7 @@ overall_status(Results) ->
 resp_code_priority(RespCode) when RespCode >= 400 -> 1;
 resp_code_priority(RespCode) when RespCode > 200 -> 2;
 resp_code_priority(_) -> 3.
+
+-spec add_kazoo_device_id(kz_json:object(), kzd_devices:doc()) -> kz_json:object().
+add_kazoo_device_id(JObj, Device) ->
+    kz_json:set_value([<<"Data">>, <<"Kazoo-Device-Id">>], kz_doc:id(Device), JObj).

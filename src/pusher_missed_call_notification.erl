@@ -30,7 +30,6 @@
 -include("pusher.hrl").
 
 -define(SERVER, ?MODULE).
--define(PUSH_TYPE, <<"missed_call">>).
 
 -record(state, {}).
 -type state() :: #state{}.
@@ -45,6 +44,7 @@
 -define(QUEUE_NAME, <<"pusher_missed_call_listener">>).
 -define(QUEUE_OPTIONS, [{'exclusive', 'false'}]).
 -define(CONSUME_OPTIONS, [{'exclusive', 'false'}]).
+-define(PUSH_TYPE, <<"missed_call">>).
 
 %%%=============================================================================
 %%% API
@@ -154,7 +154,16 @@ code_change(_OldVsn, State, _Extra) ->
 handle_message(JObj, _State) ->
     AccountId = kz_json:get_ne_binary_value(<<"Account-ID">>, JObj),
     OwnerId = get_owner_id(JObj, AccountId),
-    generate_and_maybe_push_payload(JObj, AccountId, OwnerId).
+    Payload = kz_json:from_list_recursive([{<<"Account-ID">>, AccountId}
+                                          ,{<<"Endpoint">>
+                                           ,[{<<"ID">>, OwnerId}
+                                            ,{<<"Type">>, <<"user">>}
+                                            ]
+                                           }
+                                          ,{<<"Data">>, generate_data(JObj)}
+                                          | kz_api:default_headers(?APP_NAME, ?APP_VERSION)
+                                          ]),
+    kapi_pusher:publish_endpoint_push_req(Payload).
 
 -spec get_owner_id(kz_json:object(), kz_term:ne_binary()) -> kz_term:ne_binary().
 get_owner_id(JObj, AccountId) ->
@@ -199,55 +208,14 @@ flow_children(FlowJObj) ->
     {Kids, _BranchKeys} = kz_json:get_values(Children),
     Kids.
 
--spec generate_and_maybe_push_payload(kz_json:object(), kz_term:ne_binary(), kz_term:ne_binary()) -> 'ok'.
-generate_and_maybe_push_payload(JObj, AccountDb, OwnerId) ->
-    generate_and_maybe_push_payload(JObj, fetch_owned_devices(AccountDb, OwnerId)).
-
-generate_and_maybe_push_payload(_JObj, []) -> 'ok';
-generate_and_maybe_push_payload(JObj, Devices) ->
-    PushObj = generate_push_payload(JObj),
-    maybe_push_notification(PushObj, Devices).
-
-fetch_owned_devices(AccountDb, OwnerId) ->
-    {'ok', DeviceDocList} = kz_datamgr:get_results(AccountDb
-                                                  ,<<"devices/listing_by_owner">>
-                                                  ,[{'key', OwnerId}, 'include_docs']
-                                                  ),
-    DeviceDocList.
-
-generate_push_payload(JObj) ->
+-spec generate_data(kz_json:object()) -> kz_json:object().
+generate_data(JObj) ->
     CallId = kz_json:get_ne_binary_value(<<"Call-ID">>, JObj),
     CallerIdNumber = kz_json:get_ne_binary_value(<<"Caller-ID-Number">>, JObj),
     CallerIdName = kz_json:get_ne_binary_value(<<"Caller-ID-Name">>, JObj),
 
-    Payload = [{<<"Push_Type">>, ?PUSH_TYPE}
-              ,{<<"Call-ID">>, CallId}
-              ,{<<"Caller-ID-Number">>, CallerIdNumber}
-              ,{<<"Caller-ID-Name">>, CallerIdName}
-              ],
-    kz_json:set_values([{<<"Payload">>, kz_json:from_list(Payload)}], JObj).
-
-maybe_push_notification(PushJObj, Devices) ->
-    %% foreach device
-    lists:foreach(fun(Device) -> maybe_push_to_device(PushJObj, Device) end
-                 ,Devices
-                 ).
-
-maybe_push_to_device(PushJObj, Device) ->
-    %% if push object
-    case kz_json:get_json_value([<<"doc">>, <<"push">>], Device) of
-        'undefined' -> 'ok';
-        DevicePushJObj -> add_device_id_to_payload_and_push(PushJObj, DevicePushJObj, kz_doc:id(Device))
-    end.
-
-add_device_id_to_payload_and_push(PushJObj, DevicePushJObj, DeviceId) ->
-    NewPushJObj = kz_json:set_values([{<<"Payload">>, <<"kazoo_device_id">>, DeviceId}], PushJObj),
-    push_to_device(NewPushJObj, DevicePushJObj).
-
-%% send Push notification
-push_to_device(PushJObj, DevicePushJObj) ->
-    TokenInfo = [{<<"Token-ID">>, kz_json:get_ne_binary_value(<<"Token-ID">>, DevicePushJObj)}
-                ,{<<"Token-Type">>, kz_json:get_ne_binary_value(<<"Token-Type">>, DevicePushJObj)}
-                ,{<<"Token-App">>, kz_json:get_ne_binary_value(<<"Token-App">>, DevicePushJObj)}
-                ],
-    pusher_listener:push(kz_json:set_values(TokenInfo, PushJObj)).
+    kz_json:from_list([{<<"Push-Type">>, ?PUSH_TYPE}
+                      ,{<<"Call-ID">>, CallId}
+                      ,{<<"Caller-ID-Number">>, CallerIdNumber}
+                      ,{<<"Caller-ID-Name">>, CallerIdName}
+                      ]).

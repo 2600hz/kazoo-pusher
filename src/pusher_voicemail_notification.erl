@@ -140,7 +140,6 @@ code_change(_OldVsn, State, _Extra) ->
 -spec handle_message(kz_json:object(), kz_term:proplist()) -> 'ok'.
 handle_message(JObj, _Props) ->
     ToRealm = to_realm(JObj),
-
     case kz_datamgr:get_single_result(?KZ_ACCOUNTS_DB
                                      ,<<"accounts/listing_by_realm">>
                                      ,[{'key', ToRealm}]
@@ -149,7 +148,16 @@ handle_message(JObj, _Props) ->
         {'ok', AccountJObj} ->
             AccountId = kz_doc:id(AccountJObj),
             OwnerId = get_owner_id(JObj, AccountId),
-            generate_and_maybe_push_payload(JObj, AccountId, OwnerId);
+            Payload = kz_json:from_list_recursive([{<<"Account-ID">>, AccountId}
+                                                  ,{<<"Endpoint">>
+                                                   ,[{<<"ID">>, OwnerId}
+                                                    ,{<<"Type">>, <<"user">>}
+                                                    ]
+                                                   }
+                                                  ,{<<"Data">>, generate_data(JObj)}
+                                                  | kz_api:default_headers(?APP_NAME, ?APP_VERSION)
+                                                  ]),
+            kapi_pusher:publish_endpoint_push_req(Payload);
         {_Type, _Error} ->
             lager:info("failed to find realm ~s: ~p: ~p", [ToRealm, _Type, _Error])
     end.
@@ -173,63 +181,19 @@ get_owner_id(JObj, AccountDb) ->
     VMBoxDoc = kz_json:get_json_value(<<"doc">>, VMBox),
     kzd_vmboxes:owner_id(VMBoxDoc).
 
--spec generate_and_maybe_push_payload(kz_json:object(), kz_term:ne_binary(), kz_term:ne_binary()) -> ok.
-generate_and_maybe_push_payload(JObj, AccountDb, OwnerId) ->
-    generate_and_maybe_push_payload(JObj, fetch_owned_devices(AccountDb, OwnerId)).
-
-generate_and_maybe_push_payload(_JObj, []) -> 'ok';
-generate_and_maybe_push_payload(JObj, Devices) ->
-    PushObj = generate_push_payload(JObj),
-    maybe_push_notification(PushObj, Devices).
-
-fetch_owned_devices(AccountDb, OwnerId) ->
-    {'ok', DeviceDocList} = kz_datamgr:get_results(AccountDb
-                                                  ,<<"devices/listing_by_owner">>
-                                                  ,[{'key', OwnerId}, 'include_docs']
-                                                  ),
-    DeviceDocList.
-
-generate_push_payload(JObj) ->
+-spec generate_data(kz_json:object()) -> kz_json:object().
+generate_data(JObj) ->
     ToUser = kz_json:get_ne_binary_value(<<"To">>, JObj),
     New = kz_json:get_ne_binary_value(<<"Messages-New">>, JObj),
     Saved = kz_json:get_ne_binary_value(<<"Messages-Saved">>, JObj),
     PresenceId = kz_json:get_ne_binary_value(<<"Presence-ID">>, JObj),
     CallId = kz_json:get_ne_binary_value(<<"Call-ID">>, JObj),
 
-    Payload = [{<<"Push_Type">>, ?PUSH_TYPE}
-              ,{<<"To">>, ToUser}
-              ,{<<"Messages-New">>, New}
-              ,{<<"Messages-Saved">>, Saved}
-              ,{<<"Extended-Presence-ID">>, PresenceId}
-              ,{<<"Call-ID">>, CallId}
-              ],
-    kz_json:set_values([{<<"Payload">>, kz_json:from_list(Payload)}], JObj).
+    kz_json:from_list([{<<"Push-Type">>, ?PUSH_TYPE}
+                      ,{<<"To">>, ToUser}
+                      ,{<<"Messages-New">>, New}
+                      ,{<<"Messages-Saved">>, Saved}
+                      ,{<<"Extended-Presence-ID">>, PresenceId}
+                      ,{<<"Call-ID">>, CallId}
+                      ]).
 
-%% foreach element in a list, check conditional on element, and if true, do work on element
-
-%% foreach device, if push object, send Push notification
-
-maybe_push_notification(PushJObj, Devices) ->
-    %% foreach device
-    lists:foreach(fun(Device) -> maybe_push_to_device(PushJObj, Device) end
-                 ,Devices
-                 ).
-
-maybe_push_to_device(PushJObj, Device) ->
-    %% if push object
-    case kz_json:get_json_value([<<"doc">>, <<"push">>], Device) of
-        'undefined' -> 'ok';
-        DevicePushJObj -> add_device_id_to_payload_and_push(PushJObj, DevicePushJObj, kz_doc:id(Device))
-    end.
-
-add_device_id_to_payload_and_push(PushJObj, DevicePushJObj, DeviceId) ->
-    NewPushJObj = kz_json:set_values([{<<"Payload">>, <<"kazoo_device_id">>, DeviceId}], PushJObj),
-    push_to_device(NewPushJObj, DevicePushJObj).
-
-%% send Push notification
-push_to_device(PushJObj, DevicePushJObj) ->
-    TokenInfo = [{<<"Token-ID">>, kz_json:get_ne_binary_value(<<"Token-ID">>, DevicePushJObj)}
-                ,{<<"Token-Type">>, kz_json:get_ne_binary_value(<<"Token-Type">>, DevicePushJObj)}
-                ,{<<"Token-App">>, kz_json:get_ne_binary_value(<<"Token-App">>, DevicePushJObj)}
-                ],
-    pusher_listener:push(kz_json:set_values(TokenInfo, PushJObj)).
