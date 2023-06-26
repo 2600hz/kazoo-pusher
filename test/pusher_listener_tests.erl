@@ -26,6 +26,7 @@ to_endpoint_push_req_test_() ->
     CallId = kz_binary:rand_hex(16),
     CIDName = <<"Bryan Mills">>,
     CIDNumber = <<"+15555555555">>,
+    PushType = <<"incoming_call">>,
     BodyKey = <<"IC_SIL">>,
     BodyParams = [<<CIDNumber/binary, " - ", CIDName/binary>>],
     Sound = <<"ring.caf">>,
@@ -37,6 +38,7 @@ to_endpoint_push_req_test_() ->
                                 ,{<<"proxy">>, <<"proxy">>}
                                 ,{<<"registration-token">>, kz_binary:rand_hex(16)}
                                 ,{<<"account-ref">>, kz_binary:rand_hex(16)}
+                                ,{<<"Push-Type">>, PushType}
                                 ]),
 
     Req = kz_json:from_list(
