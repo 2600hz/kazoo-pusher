@@ -413,7 +413,7 @@ to_endpoint_push_req(JObj, PMMod) ->
 
     Definition = kapi_pusher:api_definition(<<"endpoint_push_req">>),
     Values = [{<<"Alert">>, alert(JObj1, PMMod)}
-             ,{<<"Data">>, data(JObj1, Payload, PMMod)}
+             ,{<<"Data">>, maybe_add_push_type(JObj, data(JObj1, Payload, PMMod))}
              ,{<<"Event-Category">>, kapi_definition:category(Definition)}
              ,{<<"Event-Name">>, kapi_definition:name(Definition)}
              ],
@@ -569,3 +569,16 @@ resp_code_priority(_) -> 3.
 -spec add_kazoo_device_id(kz_json:object(), kzd_devices:doc()) -> kz_json:object().
 add_kazoo_device_id(JObj, Device) ->
     kz_json:set_value([<<"Data">>, <<"Kazoo-Device-Id">>], kz_doc:id(Device), JObj).
+
+-spec maybe_add_push_type(kz_json:object(), kz_json:object()) -> kz_json:object().
+maybe_add_push_type(JObj, DataJobj) ->
+    case not kz_json:is_defined([<<"Data">>, <<"Push-Type">>], JObj)
+        andalso kz_json:get_value(<<"Alert-Key">>, JObj) =:= <<"IC_SIL">>
+    of
+        true -> add_push_type(DataJobj);
+        false -> JObj
+    end.
+
+-spec add_push_type(kz_json:object()) -> kz_json:object().
+add_push_type(DataJobj) ->
+    kz_json:set_value(<<"Push-Type">>, <<"incoming_call">>, DataJobj).
