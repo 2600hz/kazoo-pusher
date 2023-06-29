@@ -413,7 +413,7 @@ to_endpoint_push_req(JObj, PMMod) ->
 
     Definition = kapi_pusher:api_definition(<<"endpoint_push_req">>),
     Values = [{<<"Alert">>, alert(JObj1, PMMod)}
-             ,{<<"Data">>, maybe_add_push_type(JObj, data(JObj1, Payload, PMMod))}
+             ,{<<"Data">>, maybe_add_extra_param(JObj1, data(JObj1, Payload, PMMod))}
              ,{<<"Event-Category">>, kapi_definition:category(Definition)}
              ,{<<"Event-Name">>, kapi_definition:name(Definition)}
              ],
@@ -570,15 +570,31 @@ resp_code_priority(_) -> 3.
 add_kazoo_device_id(JObj, Device) ->
     kz_json:set_value([<<"Data">>, <<"Kazoo-Device-Id">>], kz_doc:id(Device), JObj).
 
--spec maybe_add_push_type(kz_json:object(), kz_json:object()) -> kz_json:object().
-maybe_add_push_type(JObj, DataJobj) ->
-    case not kz_json:is_defined([<<"Data">>, <<"Push-Type">>], JObj)
+-spec maybe_add_extra_param(kz_json:object(), kz_json:object()) -> kz_json:object().
+maybe_add_extra_param(JObj, DataJobj) ->
+    case not kz_json:is_defined(<<"Push-Type">>, DataJobj)
         andalso kz_json:get_value(<<"Alert-Key">>, JObj) =:= <<"IC_SIL">>
     of
-        true -> add_push_type(DataJobj);
+        true -> maybe_add_auth_param(JObj, add_incoming_call_push_type(DataJobj));
         false -> JObj
     end.
 
--spec add_push_type(kz_json:object()) -> kz_json:object().
-add_push_type(DataJobj) ->
+-spec add_incoming_call_push_type(kz_json:object()) -> kz_json:object().
+add_incoming_call_push_type(DataJobj) ->
     kz_json:set_value(<<"Push-Type">>, <<"incoming_call">>, DataJobj).
+
+-spec maybe_add_auth_param(kz_json:object(), kz_json:object()) -> kz_json:object().
+maybe_add_auth_param(JObj, DataJobj) ->
+    case kz_json:is_defined(<<"Authorizing-ID">>, JObj)
+        andalso kz_json:is_defined(<<"Authorizing-Type">>, JObj)
+    of
+        true -> add_auth_param(JObj, DataJobj);
+        false -> JObj
+    end.
+
+-spec add_auth_param(kz_json:object(), kz_json:object()) -> kz_json:object().
+add_auth_param(JObj, DataJobj) ->
+    kz_json:set_values([{<<"Authorizing-Type">>, kz_json:get_ne_binary_value(<<"Authorizing-Type">>, JObj)}
+                       ,{<<"Authorizing-ID">>, kz_json:get_ne_binary_value(<<"Authorizing-ID">>, JObj)}
+                       ]
+                      ,DataJobj).

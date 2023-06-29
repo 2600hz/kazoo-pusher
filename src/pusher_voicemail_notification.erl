@@ -183,17 +183,10 @@ get_owner_id(JObj, AccountDb) ->
 
 -spec generate_data(kz_json:object()) -> kz_json:object().
 generate_data(JObj) ->
-    ToUser = kz_json:get_ne_binary_value(<<"To">>, JObj),
-    New = kz_json:get_ne_binary_value(<<"Messages-New">>, JObj),
-    Saved = kz_json:get_ne_binary_value(<<"Messages-Saved">>, JObj),
-    PresenceId = kz_json:get_ne_binary_value(<<"Presence-ID">>, JObj),
-    CallId = kz_json:get_ne_binary_value(<<"Call-ID">>, JObj),
-
     kz_json:from_list([{<<"Push-Type">>, ?PUSH_TYPE}
-                      ,{<<"To">>, ToUser}
-                      ,{<<"Messages-New">>, New}
-                      ,{<<"Messages-Saved">>, Saved}
-                      ,{<<"Extended-Presence-ID">>, PresenceId}
-                      ,{<<"Call-ID">>, CallId}
+                      ,{<<"To">>, kz_json:get_ne_binary_value(<<"To">>, JObj)}
+                      ,{<<"Messages-New">>, kz_json:get_ne_binary_value(<<"Messages-New">>, JObj)}
+                      ,{<<"Messages-Saved">>, kz_json:get_ne_binary_value(<<"Messages-Saved">>, JObj)}
+                      ,{<<"Extended-Presence-ID">>, kz_json:get_ne_binary_value(<<"Presence-ID">>, JObj)}
+                      ,{<<"Call-ID">>, kz_json:get_ne_binary_value(<<"Call-ID">>, JObj)}
                       ]).
-

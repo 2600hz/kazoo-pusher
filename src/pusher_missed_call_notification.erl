@@ -210,12 +210,10 @@ flow_children(FlowJObj) ->
 
 -spec generate_data(kz_json:object()) -> kz_json:object().
 generate_data(JObj) ->
-    CallId = kz_json:get_ne_binary_value(<<"Call-ID">>, JObj),
-    CallerIdNumber = kz_json:get_ne_binary_value(<<"Caller-ID-Number">>, JObj),
-    CallerIdName = kz_json:get_ne_binary_value(<<"Caller-ID-Name">>, JObj),
-
     kz_json:from_list([{<<"Push-Type">>, ?PUSH_TYPE}
-                      ,{<<"Call-ID">>, CallId}
-                      ,{<<"Caller-ID-Number">>, CallerIdNumber}
-                      ,{<<"Caller-ID-Name">>, CallerIdName}
+                      ,{<<"Call-ID">>, kz_json:get_ne_binary_value(<<"Call-ID">>, JObj)}
+                      ,{<<"Caller-ID-Number">>, kz_json:get_ne_binary_value(<<"Caller-ID-Number">>, JObj)}
+                      ,{<<"Caller-ID-Name">>, kz_json:get_ne_binary_value(<<"Caller-ID-Name">>, JObj)}
+                      ,{<<"Authorizing-Type">>, kz_json:get_ne_binary_value(<<"Authorizing-Type">>, JObj)}
+                      ,{<<"Authorizing-ID">>, kz_json:get_ne_binary_value(<<"Authorizing-ID">>, JObj)}
                       ]).
