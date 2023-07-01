@@ -575,8 +575,8 @@ maybe_add_extra_param(JObj, DataJobj) ->
     case not kz_json:is_defined(<<"Push-Type">>, DataJobj)
         andalso kz_json:get_value(<<"Alert-Key">>, JObj) =:= <<"IC_SIL">>
     of
-        true -> maybe_add_auth_param(JObj, add_incoming_call_push_type(DataJobj));
-        false -> JObj
+        'true' -> maybe_add_auth_param(JObj, add_incoming_call_push_type(DataJobj));
+        'false' -> DataJobj
     end.
 
 -spec add_incoming_call_push_type(kz_json:object()) -> kz_json:object().
@@ -588,8 +588,8 @@ maybe_add_auth_param(JObj, DataJobj) ->
     case kz_json:is_defined(<<"Authorizing-ID">>, JObj)
         andalso kz_json:is_defined(<<"Authorizing-Type">>, JObj)
     of
-        true -> add_auth_param(JObj, DataJobj);
-        false -> JObj
+        'true' -> add_auth_param(JObj, DataJobj);
+        'false' -> DataJobj
     end.
 
 -spec add_auth_param(kz_json:object(), kz_json:object()) -> kz_json:object().

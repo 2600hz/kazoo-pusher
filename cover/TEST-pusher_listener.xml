@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuite tests="3" failures="0" errors="0" skipped="0" time="0.016" name="module 'pusher_listener'">
+  <testcase time="0.006" name="pusher_listener_tests:0 to_endpoint_push_req_test_ (Kamailio pusher role push reqs (apple))">
+    <system-out>
+    </system-out>
+  </testcase>
+  <testcase time="0.000" name="pusher_listener_tests:0 to_endpoint_push_req_test_ (Kamailio pusher role push reqs (firebase))">
+    <system-out>
+    </system-out>
+  </testcase>
+  <testcase time="0.000" name="pusher_listener_tests:0 to_endpoint_push_req_test_ (ignore optional headers unused by pm modules)">
+    <system-out>
+    </system-out>
+  </testcase>
+</testsuite>

@@ -38,6 +38,7 @@ to_endpoint_push_req_test_() ->
                                 ,{<<"proxy">>, <<"proxy">>}
                                 ,{<<"registration-token">>, kz_binary:rand_hex(16)}
                                 ,{<<"account-ref">>, kz_binary:rand_hex(16)}
+                                ,{<<"Kazoo-Device-Id">>, kz_binary:rand_hex(16)}
                                 ,{<<"Push-Type">>, PushType}
                                 ]),
 
