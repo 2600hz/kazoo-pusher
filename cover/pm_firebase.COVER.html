@@ -1,0 +1,1394 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>cover/pm_firebase.COVER.html</title>
+<style>body {
+  font: 14px/1.6 "Helvetica Neue", Helvetica, Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  color: #000;
+  border-top: 2px solid #ddd;
+  background-color: #fff;
+
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+h1 {
+  width: 100%;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 0;
+  font-weight: 100;
+  font-size: 1.1em;
+  letter-spacing: 1px;
+}
+
+h1 code {
+  font-size: 0.96em;
+}
+
+code {
+  font: 12px monospace;
+}
+
+footer {
+  background: #eee;
+  width: 100%;
+  padding: 10px 0;
+  text-align: right;
+  border-top: 1px solid #ddd;
+  display: flex;
+  flex: 1;
+  order: 2;
+  justify-content: center;
+}
+
+table {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+  border: 1px solid #cbcbcb;
+  color: #000;
+  -webkit-border-radius: 3px;
+  -moz-border-radius: 3px;
+}
+table thead {
+  display: none;
+}
+table td.line,
+table td.line a,
+table td.hits {
+  width: 20px;
+  background: #eaeaea;
+  text-align: center;
+  text-decoration: none;
+  font-size: 11px;
+  padding: 0 10px;
+  color: #949494;
+}
+table td.hits {
+  width: 10px;
+  text-align: right;
+  padding: 2px 5px;
+  color: rgba(0, 0, 0, 0.6);
+  background-color: #f0f0f0;
+}
+tr.miss td.line,
+tr.miss td.line a,
+tr.miss td.hits {
+  background-color: #ffdce0;
+  border-color: #fdaeb7;
+}
+tr.miss td {
+  background-color: #ffeef0;
+}
+tr.hit td.line,
+tr.hit td.line a,
+tr.hit td.hits {
+  background-color: #cdffd8;
+  border-color: #bef5cb;
+}
+tr.hit td {
+  background-color: #e6ffed;
+}
+td.source {
+  padding-left: 15px;
+  line-height: 15px;
+  white-space: pre;
+  font: 12px monospace;
+}
+</style>
+</head>
+<body>
+<h1><code>cover/pm_firebase.COVER.html</code></h1>
+<footer><p>File generated from <code>/home/wimal/kazoo5/applications/pusher/ebin/../src/modules/pm_firebase.erl</code> by <a href="http://erlang.org/doc/man/cover.html">cover</a> at 2023-07-01 at 15:56:02</p></footer>
+<table>
+<tbody>
+<tr>
+<td class="line" id="L1"><a href="#L1">1</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%%-----------------------------------------------------------------------------</code></td>
+</tr>
+<tr>
+<td class="line" id="L2"><a href="#L2">2</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%% @copyright (C) 2010-2023, 2600Hz</code></td>
+</tr>
+<tr>
+<td class="line" id="L3"><a href="#L3">3</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%% @doc</code></td>
+</tr>
+<tr>
+<td class="line" id="L4"><a href="#L4">4</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%% This Source Code Form is subject to the terms of the Mozilla Public</code></td>
+</tr>
+<tr>
+<td class="line" id="L5"><a href="#L5">5</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%% License, v. 2.0. If a copy of the MPL was not distributed with this</code></td>
+</tr>
+<tr>
+<td class="line" id="L6"><a href="#L6">6</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%% file, You can obtain one at https://mozilla.org/MPL/2.0/.</code></td>
+</tr>
+<tr>
+<td class="line" id="L7"><a href="#L7">7</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%%</code></td>
+</tr>
+<tr>
+<td class="line" id="L8"><a href="#L8">8</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%% @end</code></td>
+</tr>
+<tr>
+<td class="line" id="L9"><a href="#L9">9</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%%-----------------------------------------------------------------------------</code></td>
+</tr>
+<tr>
+<td class="line" id="L10"><a href="#L10">10</a></td>
+<td class="hits"></td>
+<td class="source"><code>-module(pm_firebase).</code></td>
+</tr>
+<tr>
+<td class="line" id="L11"><a href="#L11">11</a></td>
+<td class="hits"></td>
+<td class="source"><code>-behaviour(gen_server).</code></td>
+</tr>
+<tr>
+<td class="line" id="L12"><a href="#L12">12</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L13"><a href="#L13">13</a></td>
+<td class="hits"></td>
+<td class="source"><code>-include("pusher.hrl").</code></td>
+</tr>
+<tr>
+<td class="line" id="L14"><a href="#L14">14</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L15"><a href="#L15">15</a></td>
+<td class="hits"></td>
+<td class="source"><code>-define(SERVER, ?MODULE).</code></td>
+</tr>
+<tr>
+<td class="line" id="L16"><a href="#L16">16</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L17"><a href="#L17">17</a></td>
+<td class="hits"></td>
+<td class="source"><code>-export([start_link/0]).</code></td>
+</tr>
+<tr>
+<td class="line" id="L18"><a href="#L18">18</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L19"><a href="#L19">19</a></td>
+<td class="hits"></td>
+<td class="source"><code>-export([init/1</code></td>
+</tr>
+<tr>
+<td class="line" id="L20"><a href="#L20">20</a></td>
+<td class="hits"></td>
+<td class="source"><code>        ,handle_call/3</code></td>
+</tr>
+<tr>
+<td class="line" id="L21"><a href="#L21">21</a></td>
+<td class="hits"></td>
+<td class="source"><code>        ,handle_cast/2</code></td>
+</tr>
+<tr>
+<td class="line" id="L22"><a href="#L22">22</a></td>
+<td class="hits"></td>
+<td class="source"><code>        ,handle_info/2</code></td>
+</tr>
+<tr>
+<td class="line" id="L23"><a href="#L23">23</a></td>
+<td class="hits"></td>
+<td class="source"><code>        ,terminate/2</code></td>
+</tr>
+<tr>
+<td class="line" id="L24"><a href="#L24">24</a></td>
+<td class="hits"></td>
+<td class="source"><code>        ,code_change/3</code></td>
+</tr>
+<tr>
+<td class="line" id="L25"><a href="#L25">25</a></td>
+<td class="hits"></td>
+<td class="source"><code>        ]).</code></td>
+</tr>
+<tr>
+<td class="line" id="L26"><a href="#L26">26</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L27"><a href="#L27">27</a></td>
+<td class="hits"></td>
+<td class="source"><code>-record(state, {tab :: ets:tid()}).</code></td>
+</tr>
+<tr>
+<td class="line" id="L28"><a href="#L28">28</a></td>
+<td class="hits"></td>
+<td class="source"><code>-type state() :: #state{}.</code></td>
+</tr>
+<tr>
+<td class="line" id="L29"><a href="#L29">29</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L30"><a href="#L30">30</a></td>
+<td class="hits"></td>
+<td class="source"><code>-define(KEY_DATA, &lt;&lt;"data"&gt;&gt;).</code></td>
+</tr>
+<tr>
+<td class="line" id="L31"><a href="#L31">31</a></td>
+<td class="hits"></td>
+<td class="source"><code>-define(KEY_NOTIFICATION, &lt;&lt;"notification"&gt;&gt;).</code></td>
+</tr>
+<tr>
+<td class="line" id="L32"><a href="#L32">32</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L33"><a href="#L33">33</a></td>
+<td class="hits"></td>
+<td class="source"><code>-define(PAYLOAD_MAP, #{&lt;&lt;"Alert"&gt;&gt; =&gt; #{&lt;&lt;"Title"&gt;&gt; =&gt; [?KEY_NOTIFICATION, &lt;&lt;"title"&gt;&gt;]</code></td>
+</tr>
+<tr>
+<td class="line" id="L34"><a href="#L34">34</a></td>
+<td class="hits"></td>
+<td class="source"><code>                                       ,&lt;&lt;"Subtitle"&gt;&gt; =&gt; [?KEY_NOTIFICATION, &lt;&lt;"subtitle"&gt;&gt;]</code></td>
+</tr>
+<tr>
+<td class="line" id="L35"><a href="#L35">35</a></td>
+<td class="hits"></td>
+<td class="source"><code>                                       ,&lt;&lt;"Body"&gt;&gt; =&gt; [?KEY_NOTIFICATION, &lt;&lt;"body"&gt;&gt;]</code></td>
+</tr>
+<tr>
+<td class="line" id="L36"><a href="#L36">36</a></td>
+<td class="hits"></td>
+<td class="source"><code>                                       ,&lt;&lt;"Title-Key"&gt;&gt; =&gt; [?KEY_NOTIFICATION, &lt;&lt;"title_loc_key"&gt;&gt;]</code></td>
+</tr>
+<tr>
+<td class="line" id="L37"><a href="#L37">37</a></td>
+<td class="hits"></td>
+<td class="source"><code>                                       ,&lt;&lt;"Title-Params"&gt;&gt; =&gt; [?KEY_NOTIFICATION, &lt;&lt;"title_loc_args"&gt;&gt;]</code></td>
+</tr>
+<tr>
+<td class="line" id="L38"><a href="#L38">38</a></td>
+<td class="hits"></td>
+<td class="source"><code>                                       ,&lt;&lt;"Body-Key"&gt;&gt; =&gt; [?KEY_NOTIFICATION, &lt;&lt;"body_loc_key"&gt;&gt;]</code></td>
+</tr>
+<tr>
+<td class="line" id="L39"><a href="#L39">39</a></td>
+<td class="hits"></td>
+<td class="source"><code>                                       ,&lt;&lt;"Body-Params"&gt;&gt; =&gt; [?KEY_NOTIFICATION, &lt;&lt;"body_loc_args"&gt;&gt;]</code></td>
+</tr>
+<tr>
+<td class="line" id="L40"><a href="#L40">40</a></td>
+<td class="hits"></td>
+<td class="source"><code>                                       }</code></td>
+</tr>
+<tr>
+<td class="line" id="L41"><a href="#L41">41</a></td>
+<td class="hits"></td>
+<td class="source"><code>                      ,&lt;&lt;"Badge"&gt;&gt; =&gt; fun set_badge/2</code></td>
+</tr>
+<tr>
+<td class="line" id="L42"><a href="#L42">42</a></td>
+<td class="hits"></td>
+<td class="source"><code>                      ,&lt;&lt;"Category"&gt;&gt; =&gt; [?KEY_NOTIFICATION, &lt;&lt;"click_action"&gt;&gt;]</code></td>
+</tr>
+<tr>
+<td class="line" id="L43"><a href="#L43">43</a></td>
+<td class="hits"></td>
+<td class="source"><code>                      ,&lt;&lt;"Collapse-ID"&gt;&gt; =&gt; &lt;&lt;"collapse_key"&gt;&gt;</code></td>
+</tr>
+<tr>
+<td class="line" id="L44"><a href="#L44">44</a></td>
+<td class="hits"></td>
+<td class="source"><code>                      ,&lt;&lt;"Content-Available"&gt;&gt; =&gt; &lt;&lt;"content_available"&gt;&gt;</code></td>
+</tr>
+<tr>
+<td class="line" id="L45"><a href="#L45">45</a></td>
+<td class="hits"></td>
+<td class="source"><code>                      ,&lt;&lt;"Content-Mutable"&gt;&gt; =&gt; &lt;&lt;"mutable_content"&gt;&gt;</code></td>
+</tr>
+<tr>
+<td class="line" id="L46"><a href="#L46">46</a></td>
+<td class="hits"></td>
+<td class="source"><code>                      ,&lt;&lt;"FCM"&gt;&gt; =&gt; #{&lt;&lt;"Android"&gt;&gt; =&gt; #{&lt;&lt;"Channel-ID"&gt;&gt; =&gt; [?KEY_NOTIFICATION, &lt;&lt;"android_channel_id"&gt;&gt;]</code></td>
+</tr>
+<tr>
+<td class="line" id="L47"><a href="#L47">47</a></td>
+<td class="hits"></td>
+<td class="source"><code>                                                        ,&lt;&lt;"Color"&gt;&gt; =&gt; [?KEY_NOTIFICATION, &lt;&lt;"color"&gt;&gt;]</code></td>
+</tr>
+<tr>
+<td class="line" id="L48"><a href="#L48">48</a></td>
+<td class="hits"></td>
+<td class="source"><code>                                                        ,&lt;&lt;"Icon"&gt;&gt; =&gt; [?KEY_NOTIFICATION, &lt;&lt;"icon"&gt;&gt;]</code></td>
+</tr>
+<tr>
+<td class="line" id="L49"><a href="#L49">49</a></td>
+<td class="hits"></td>
+<td class="source"><code>                                                        ,&lt;&lt;"Tag"&gt;&gt; =&gt; [?KEY_NOTIFICATION, &lt;&lt;"tag"&gt;&gt;]</code></td>
+</tr>
+<tr>
+<td class="line" id="L50"><a href="#L50">50</a></td>
+<td class="hits"></td>
+<td class="source"><code>                                                        }}</code></td>
+</tr>
+<tr>
+<td class="line" id="L51"><a href="#L51">51</a></td>
+<td class="hits"></td>
+<td class="source"><code>                      ,&lt;&lt;"Priority"&gt;&gt; =&gt; fun set_priority/2</code></td>
+</tr>
+<tr>
+<td class="line" id="L52"><a href="#L52">52</a></td>
+<td class="hits"></td>
+<td class="source"><code>                      ,&lt;&lt;"Sound"&gt;&gt; =&gt; [?KEY_NOTIFICATION, &lt;&lt;"sound"&gt;&gt;]</code></td>
+</tr>
+<tr>
+<td class="line" id="L53"><a href="#L53">53</a></td>
+<td class="hits"></td>
+<td class="source"><code>                      ,&lt;&lt;"TTL"&gt;&gt; =&gt; &lt;&lt;"time_to_live"&gt;&gt;</code></td>
+</tr>
+<tr>
+<td class="line" id="L54"><a href="#L54">54</a></td>
+<td class="hits"></td>
+<td class="source"><code>                           %% For `push_req` backwards-compatibility</code></td>
+</tr>
+<tr>
+<td class="line" id="L55"><a href="#L55">55</a></td>
+<td class="hits"></td>
+<td class="source"><code>                      ,&lt;&lt;"Call-ID"&gt;&gt; =&gt; [?KEY_DATA, &lt;&lt;"Call-ID"&gt;&gt;]</code></td>
+</tr>
+<tr>
+<td class="line" id="L56"><a href="#L56">56</a></td>
+<td class="hits"></td>
+<td class="source"><code>                      }).</code></td>
+</tr>
+<tr>
+<td class="line" id="L57"><a href="#L57">57</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L58"><a href="#L58">58</a></td>
+<td class="hits"></td>
+<td class="source"><code>-type reg_id() :: kz_term:ne_binary().</code></td>
+</tr>
+<tr>
+<td class="line" id="L59"><a href="#L59">59</a></td>
+<td class="hits"></td>
+<td class="source"><code>-type fcm_response() :: [{reg_id()</code></td>
+</tr>
+<tr>
+<td class="line" id="L60"><a href="#L60">60</a></td>
+<td class="hits"></td>
+<td class="source"><code>                         ,'ok' |</code></td>
+</tr>
+<tr>
+<td class="line" id="L61"><a href="#L61">61</a></td>
+<td class="hits"></td>
+<td class="source"><code>                          {kz_term:ne_binary(), reg_id()} |</code></td>
+</tr>
+<tr>
+<td class="line" id="L62"><a href="#L62">62</a></td>
+<td class="hits"></td>
+<td class="source"><code>                          kz_term:ne_binary()</code></td>
+</tr>
+<tr>
+<td class="line" id="L63"><a href="#L63">63</a></td>
+<td class="hits"></td>
+<td class="source"><code>                         },...] |</code></td>
+</tr>
+<tr>
+<td class="line" id="L64"><a href="#L64">64</a></td>
+<td class="hits"></td>
+<td class="source"><code>                        {'error'</code></td>
+</tr>
+<tr>
+<td class="line" id="L65"><a href="#L65">65</a></td>
+<td class="hits"></td>
+<td class="source"><code>                        ,'auth_error' | 'retry' | 'timeout' | kz_term:ne_binary()</code></td>
+</tr>
+<tr>
+<td class="line" id="L66"><a href="#L66">66</a></td>
+<td class="hits"></td>
+<td class="source"><code>                        }.</code></td>
+</tr>
+<tr>
+<td class="line" id="L67"><a href="#L67">67</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L68"><a href="#L68">68</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec start_link() -&gt; kz_types:startlink_ret().</code></td>
+</tr>
+<tr>
+<td class="line" id="L69"><a href="#L69">69</a></td>
+<td class="hits"></td>
+<td class="source"><code>start_link() -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L70"><a href="#L70">70</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    gen_server:start_link({'local', ?SERVER}, ?MODULE, [],[]).</code></td>
+</tr>
+<tr>
+<td class="line" id="L71"><a href="#L71">71</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L72"><a href="#L72">72</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec init([]) -&gt; {'ok', state()}.</code></td>
+</tr>
+<tr>
+<td class="line" id="L73"><a href="#L73">73</a></td>
+<td class="hits"></td>
+<td class="source"><code>init([]) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L74"><a href="#L74">74</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    kz_log:put_callid(?MODULE),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L75"><a href="#L75">75</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    lager:debug("starting server"),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L76"><a href="#L76">76</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {'ok', #state{tab=ets:new(?MODULE, [])}}.</code></td>
+</tr>
+<tr>
+<td class="line" id="L77"><a href="#L77">77</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L78"><a href="#L78">78</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec handle_call(any(), kz_term:pid_ref(), state()) -&gt; kz_types:handle_call_ret_state(state()).</code></td>
+</tr>
+<tr>
+<td class="line" id="L79"><a href="#L79">79</a></td>
+<td class="hits"></td>
+<td class="source"><code>handle_call({'push', Token, TokenApp, JObj}, _From, #state{tab=ETS}=State) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L80"><a href="#L80">80</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    kz_log:put_callid(JObj),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L81"><a href="#L81">81</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    Reply = maybe_send_push_notification(get_fcm(TokenApp, ETS), Token, JObj),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L82"><a href="#L82">82</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {'reply', Reply, State};</code></td>
+</tr>
+<tr>
+<td class="line" id="L83"><a href="#L83">83</a></td>
+<td class="hits"></td>
+<td class="source"><code>handle_call(_Request, _From, State) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L84"><a href="#L84">84</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {'reply', {'error', 'not_implemented'}, State}.</code></td>
+</tr>
+<tr>
+<td class="line" id="L85"><a href="#L85">85</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L86"><a href="#L86">86</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec handle_cast(any(), state()) -&gt; kz_types:handle_cast_ret_state(state()).</code></td>
+</tr>
+<tr>
+<td class="line" id="L87"><a href="#L87">87</a></td>
+<td class="hits"></td>
+<td class="source"><code>handle_cast('stop', State) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L88"><a href="#L88">88</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {'stop', 'normal', State}.</code></td>
+</tr>
+<tr>
+<td class="line" id="L89"><a href="#L89">89</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L90"><a href="#L90">90</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec handle_info(any(), state()) -&gt; kz_types:handle_info_ret_state(state()).</code></td>
+</tr>
+<tr>
+<td class="line" id="L91"><a href="#L91">91</a></td>
+<td class="hits"></td>
+<td class="source"><code>handle_info(_Request, State) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L92"><a href="#L92">92</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {'noreply', State}.</code></td>
+</tr>
+<tr>
+<td class="line" id="L93"><a href="#L93">93</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L94"><a href="#L94">94</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec terminate(any(), state()) -&gt; 'ok'.</code></td>
+</tr>
+<tr>
+<td class="line" id="L95"><a href="#L95">95</a></td>
+<td class="hits"></td>
+<td class="source"><code>terminate(_Reason, #state{tab=ETS}) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L96"><a href="#L96">96</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    ets:delete(ETS),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L97"><a href="#L97">97</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    'ok'.</code></td>
+</tr>
+<tr>
+<td class="line" id="L98"><a href="#L98">98</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L99"><a href="#L99">99</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec code_change(any(), state(), any()) -&gt; {'ok', state()}.</code></td>
+</tr>
+<tr>
+<td class="line" id="L100"><a href="#L100">100</a></td>
+<td class="hits"></td>
+<td class="source"><code>code_change(_OldVsn, State, _Extra) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L101"><a href="#L101">101</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {'ok', State}.</code></td>
+</tr>
+<tr>
+<td class="line" id="L102"><a href="#L102">102</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L103"><a href="#L103">103</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%%=============================================================================</code></td>
+</tr>
+<tr>
+<td class="line" id="L104"><a href="#L104">104</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%% Internal functions</code></td>
+</tr>
+<tr>
+<td class="line" id="L105"><a href="#L105">105</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%%=============================================================================</code></td>
+</tr>
+<tr>
+<td class="line" id="L106"><a href="#L106">106</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L107"><a href="#L107">107</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%------------------------------------------------------------------------------</code></td>
+</tr>
+<tr>
+<td class="line" id="L108"><a href="#L108">108</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% @doc Send the push notification if an FCM worker is running.</code></td>
+</tr>
+<tr>
+<td class="line" id="L109"><a href="#L109">109</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% @end</code></td>
+</tr>
+<tr>
+<td class="line" id="L110"><a href="#L110">110</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%------------------------------------------------------------------------------</code></td>
+</tr>
+<tr>
+<td class="line" id="L111"><a href="#L111">111</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec maybe_send_push_notification(push_app(), reg_id(), kz_json:object()) -&gt;</code></td>
+</tr>
+<tr>
+<td class="line" id="L112"><a href="#L112">112</a></td>
+<td class="hits"></td>
+<td class="source"><code>          pusher_result:t().</code></td>
+</tr>
+<tr>
+<td class="line" id="L113"><a href="#L113">113</a></td>
+<td class="hits"></td>
+<td class="source"><code>maybe_send_push_notification('undefined', _, _) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L114"><a href="#L114">114</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    lager:debug("no pid to send push"),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L115"><a href="#L115">115</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    pusher_result:internal_server_error(&lt;&lt;"No FCM connection"&gt;&gt;);</code></td>
+</tr>
+<tr>
+<td class="line" id="L116"><a href="#L116">116</a></td>
+<td class="hits"></td>
+<td class="source"><code>maybe_send_push_notification({Pid, Envelope}, TokenID, JObj) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L117"><a href="#L117">117</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {CustomData, JObj1} = pusher_module_util:extract_custom_data(JObj),</code></td>
+</tr>
+<tr>
+<td class="line" id="L118"><a href="#L118">118</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L119"><a href="#L119">119</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    Message = build_message(JObj1, CustomData, Envelope),</code></td>
+</tr>
+<tr>
+<td class="line" id="L120"><a href="#L120">120</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L121"><a href="#L121">121</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    lager:debug("pushing to ~p: ~s: ~p", [Pid, TokenID, Message]),</code></td>
+</tr>
+<tr>
+<td class="line" id="L122"><a href="#L122">122</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L123"><a href="#L123">123</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    Result = fcm:sync_push(Pid, [TokenID], Message),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L124"><a href="#L124">124</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    to_pusher_result(Result).</code></td>
+</tr>
+<tr>
+<td class="line" id="L125"><a href="#L125">125</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L126"><a href="#L126">126</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%------------------------------------------------------------------------------</code></td>
+</tr>
+<tr>
+<td class="line" id="L127"><a href="#L127">127</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% @doc Build the FCM message payload.</code></td>
+</tr>
+<tr>
+<td class="line" id="L128"><a href="#L128">128</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% @end</code></td>
+</tr>
+<tr>
+<td class="line" id="L129"><a href="#L129">129</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%------------------------------------------------------------------------------</code></td>
+</tr>
+<tr>
+<td class="line" id="L130"><a href="#L130">130</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec build_message(kz_json:object(), map(), map()) -&gt; map().</code></td>
+</tr>
+<tr>
+<td class="line" id="L131"><a href="#L131">131</a></td>
+<td class="hits"></td>
+<td class="source"><code>build_message(JObj, CustomData, Envelope) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L132"><a href="#L132">132</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    FlatProps = kz_json:to_proplist(kz_json:flatten(JObj)),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L133"><a href="#L133">133</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    Message = pusher_module_util:build_payload(</code></td>
+</tr>
+<tr>
+<td class="line" id="L134"><a href="#L134">134</a></td>
+<td class="hits"></td>
+<td class="source"><code>                FlatProps, JObj, ?PAYLOAD_MAP, #{?KEY_DATA =&gt; CustomData}</code></td>
+</tr>
+<tr>
+<td class="line" id="L135"><a href="#L135">135</a></td>
+<td class="hits"></td>
+<td class="source"><code>               ),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L136"><a href="#L136">136</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    kz_maps:merge(Message, Envelope).</code></td>
+</tr>
+<tr>
+<td class="line" id="L137"><a href="#L137">137</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L138"><a href="#L138">138</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec get_fcm(kz_term:ne_binary(), ets:tid()) -&gt; push_app().</code></td>
+</tr>
+<tr>
+<td class="line" id="L139"><a href="#L139">139</a></td>
+<td class="hits"></td>
+<td class="source"><code>get_fcm(App, ETS) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L140"><a href="#L140">140</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    case ets:lookup(ETS, App) of</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L141"><a href="#L141">141</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>        [] -&gt; maybe_load_fcm(App, ETS);</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L142"><a href="#L142">142</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>        [{App, Push}] -&gt; Push</code></td>
+</tr>
+<tr>
+<td class="line" id="L143"><a href="#L143">143</a></td>
+<td class="hits"></td>
+<td class="source"><code>    end.</code></td>
+</tr>
+<tr>
+<td class="line" id="L144"><a href="#L144">144</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L145"><a href="#L145">145</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec maybe_load_fcm(kz_term:ne_binary(), ets:tid()) -&gt; push_app().</code></td>
+</tr>
+<tr>
+<td class="line" id="L146"><a href="#L146">146</a></td>
+<td class="hits"></td>
+<td class="source"><code>maybe_load_fcm(App, ETS) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L147"><a href="#L147">147</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    lager:debug("loading fcm secret for ~s", [App]),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L148"><a href="#L148">148</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    FCMSecret = kapps_config:get_binary(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE, &lt;&lt;"api_key"&gt;&gt;], &lt;&lt;&gt;&gt;, App),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L149"><a href="#L149">149</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    EnvelopeJObj = kapps_config:get_json(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE, &lt;&lt;"headers"&gt;&gt;], kz_json:new(), App),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L150"><a href="#L150">150</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    Envelope = kz_json:to_map(EnvelopeJObj),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L151"><a href="#L151">151</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    maybe_load_fcm(App, ETS, FCMSecret, Envelope).</code></td>
+</tr>
+<tr>
+<td class="line" id="L152"><a href="#L152">152</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L153"><a href="#L153">153</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec maybe_load_fcm(kz_term:ne_binary(), ets:tid(), binary(), map()) -&gt; push_app().</code></td>
+</tr>
+<tr>
+<td class="line" id="L154"><a href="#L154">154</a></td>
+<td class="hits"></td>
+<td class="source"><code>maybe_load_fcm(App, _ETS, &lt;&lt;&gt;&gt;, _Envelope) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L155"><a href="#L155">155</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    lager:debug("firebase pusher api_key for app ~s not found", [App]),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L156"><a href="#L156">156</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    'undefined';</code></td>
+</tr>
+<tr>
+<td class="line" id="L157"><a href="#L157">157</a></td>
+<td class="hits"></td>
+<td class="source"><code>maybe_load_fcm(App, ETS, APIKey, Envelope) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L158"><a href="#L158">158</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    case fcm:start(kz_term:to_atom(&lt;&lt;"fcm_", App/binary&gt;&gt;, 'true'), kz_term:to_list(APIKey)) of</code></td>
+</tr>
+<tr>
+<td class="line" id="L159"><a href="#L159">159</a></td>
+<td class="hits"></td>
+<td class="source"><code>        {'ok', Pid} -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L160"><a href="#L160">160</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>            ets:insert(ETS, {App, {Pid, Envelope}}),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L161"><a href="#L161">161</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>            {Pid, Envelope};</code></td>
+</tr>
+<tr>
+<td class="line" id="L162"><a href="#L162">162</a></td>
+<td class="hits"></td>
+<td class="source"><code>        {'error', {'already_started', Pid}} -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L163"><a href="#L163">163</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>            ets:insert(ETS, {App, {Pid, Envelope}}),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L164"><a href="#L164">164</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>            {Pid, Envelope};</code></td>
+</tr>
+<tr>
+<td class="line" id="L165"><a href="#L165">165</a></td>
+<td class="hits"></td>
+<td class="source"><code>        {'error', Reason} -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L166"><a href="#L166">166</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>            lager:error("error loading fcm ~p", [Reason]),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L167"><a href="#L167">167</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>            'undefined'</code></td>
+</tr>
+<tr>
+<td class="line" id="L168"><a href="#L168">168</a></td>
+<td class="hits"></td>
+<td class="source"><code>    end.</code></td>
+</tr>
+<tr>
+<td class="line" id="L169"><a href="#L169">169</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L170"><a href="#L170">170</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%------------------------------------------------------------------------------</code></td>
+</tr>
+<tr>
+<td class="line" id="L171"><a href="#L171">171</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% @doc Set the home screen badge value.</code></td>
+</tr>
+<tr>
+<td class="line" id="L172"><a href="#L172">172</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% @end</code></td>
+</tr>
+<tr>
+<td class="line" id="L173"><a href="#L173">173</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%------------------------------------------------------------------------------</code></td>
+</tr>
+<tr>
+<td class="line" id="L174"><a href="#L174">174</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec set_badge(integer(), map()) -&gt; map().</code></td>
+</tr>
+<tr>
+<td class="line" id="L175"><a href="#L175">175</a></td>
+<td class="hits"></td>
+<td class="source"><code>set_badge(Badge, Payload) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L176"><a href="#L176">176</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    kz_maps:put([?KEY_NOTIFICATION, &lt;&lt;"badge"&gt;&gt;]</code></td>
+</tr>
+<tr>
+<td class="line" id="L177"><a href="#L177">177</a></td>
+<td class="hits"></td>
+<td class="source"><code>               ,Payload</code></td>
+</tr>
+<tr>
+<td class="line" id="L178"><a href="#L178">178</a></td>
+<td class="hits"></td>
+<td class="source"><code>               ,kz_term:to_binary(Badge)</code></td>
+</tr>
+<tr>
+<td class="line" id="L179"><a href="#L179">179</a></td>
+<td class="hits"></td>
+<td class="source"><code>               ).</code></td>
+</tr>
+<tr>
+<td class="line" id="L180"><a href="#L180">180</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L181"><a href="#L181">181</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%------------------------------------------------------------------------------</code></td>
+</tr>
+<tr>
+<td class="line" id="L182"><a href="#L182">182</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% @doc Set the message delivery priority.</code></td>
+</tr>
+<tr>
+<td class="line" id="L183"><a href="#L183">183</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% @end</code></td>
+</tr>
+<tr>
+<td class="line" id="L184"><a href="#L184">184</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%------------------------------------------------------------------------------</code></td>
+</tr>
+<tr>
+<td class="line" id="L185"><a href="#L185">185</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec set_priority(kz_term:ne_binary(), map()) -&gt; map().</code></td>
+</tr>
+<tr>
+<td class="line" id="L186"><a href="#L186">186</a></td>
+<td class="hits"></td>
+<td class="source"><code>set_priority(PriorityBin, Payload) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L187"><a href="#L187">187</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    Priority = adjusted_priority(PriorityBin),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L188"><a href="#L188">188</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    Payload#{&lt;&lt;"priority"&gt;&gt; =&gt; Priority}.</code></td>
+</tr>
+<tr>
+<td class="line" id="L189"><a href="#L189">189</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L190"><a href="#L190">190</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec adjusted_priority(kz_term:ne_binary()) -&gt; kz_term:ne_binary().</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L191"><a href="#L191">191</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>adjusted_priority(&lt;&lt;"low"&gt;&gt;) -&gt; &lt;&lt;"normal"&gt;&gt;;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L192"><a href="#L192">192</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>adjusted_priority(Priority) -&gt; Priority.</code></td>
+</tr>
+<tr>
+<td class="line" id="L193"><a href="#L193">193</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L194"><a href="#L194">194</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%------------------------------------------------------------------------------</code></td>
+</tr>
+<tr>
+<td class="line" id="L195"><a href="#L195">195</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% @doc Convert an FCM response into a `pusher_result'. See</code></td>
+</tr>
+<tr>
+<td class="line" id="L196"><a href="#L196">196</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% [https://firebase.google.com/docs/cloud-messaging/http-server-ref#interpret-downstream].</code></td>
+</tr>
+<tr>
+<td class="line" id="L197"><a href="#L197">197</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% Results list length should always be 1 since we are only sending to one</code></td>
+</tr>
+<tr>
+<td class="line" id="L198"><a href="#L198">198</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% registration ID at a time.</code></td>
+</tr>
+<tr>
+<td class="line" id="L199"><a href="#L199">199</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% @end</code></td>
+</tr>
+<tr>
+<td class="line" id="L200"><a href="#L200">200</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%------------------------------------------------------------------------------</code></td>
+</tr>
+<tr>
+<td class="line" id="L201"><a href="#L201">201</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec to_pusher_result(fcm_response()) -&gt; pusher_result:t().</code></td>
+</tr>
+<tr>
+<td class="line" id="L202"><a href="#L202">202</a></td>
+<td class="hits"></td>
+<td class="source"><code>to_pusher_result([{_RegId, Result}]) when Result =:= 'ok'; tuple_size(Result) =:= 2 -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L203"><a href="#L203">203</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    pusher_result:success();</code></td>
+</tr>
+<tr>
+<td class="line" id="L204"><a href="#L204">204</a></td>
+<td class="hits"></td>
+<td class="source"><code>to_pusher_result([{_RegId, Error}]) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L205"><a href="#L205">205</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {RespCode, ErrorMessage} = push_error_details(Error),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L206"><a href="#L206">206</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    pusher_result:new(RespCode, Error, ErrorMessage);</code></td>
+</tr>
+<tr>
+<td class="line" id="L207"><a href="#L207">207</a></td>
+<td class="hits"></td>
+<td class="source"><code>to_pusher_result({'error', 'auth_error'}) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L208"><a href="#L208">208</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    Message = &lt;&lt;"There was an error authenticating the sender account."&gt;&gt;,</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L209"><a href="#L209">209</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    pusher_result:new(401, &lt;&lt;"Unauthorized"&gt;&gt;, Message);</code></td>
+</tr>
+<tr>
+<td class="line" id="L210"><a href="#L210">210</a></td>
+<td class="hits"></td>
+<td class="source"><code>to_pusher_result({'error', 'retry'}) -&gt;</code></td>
+</tr>
+<tr>
+<td class="line" id="L211"><a href="#L211">211</a></td>
+<td class="hits"></td>
+<td class="source"><code>    %% Request encountered an error, but `fcm' is going to back off/retry</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L212"><a href="#L212">212</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    Message = &lt;&lt;"Message delivery will be retried later"&gt;&gt;,</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L213"><a href="#L213">213</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    pusher_result:new(202, &lt;&lt;"Accepted"&gt;&gt;, Message);</code></td>
+</tr>
+<tr>
+<td class="line" id="L214"><a href="#L214">214</a></td>
+<td class="hits"></td>
+<td class="source"><code>to_pusher_result({'error', 'timeout'}) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L215"><a href="#L215">215</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    pusher_result:gateway_timeout(&lt;&lt;"Timed out communicating with FCM"&gt;&gt;);</code></td>
+</tr>
+<tr>
+<td class="line" id="L216"><a href="#L216">216</a></td>
+<td class="hits"></td>
+<td class="source"><code>to_pusher_result({'error', Body}) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L217"><a href="#L217">217</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    pusher_result:bad_request(Body).</code></td>
+</tr>
+<tr>
+<td class="line" id="L218"><a href="#L218">218</a></td>
+<td class="hits"></td>
+<td class="source"><code></code></td>
+</tr>
+<tr>
+<td class="line" id="L219"><a href="#L219">219</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%------------------------------------------------------------------------------</code></td>
+</tr>
+<tr>
+<td class="line" id="L220"><a href="#L220">220</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% @doc Get the response code and error message corresponding to an FCM response</code></td>
+</tr>
+<tr>
+<td class="line" id="L221"><a href="#L221">221</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% error. See</code></td>
+</tr>
+<tr>
+<td class="line" id="L222"><a href="#L222">222</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% [https://firebase.google.com/docs/cloud-messaging/http-server-ref#error-codes].</code></td>
+</tr>
+<tr>
+<td class="line" id="L223"><a href="#L223">223</a></td>
+<td class="hits"></td>
+<td class="source"><code>%% @end</code></td>
+</tr>
+<tr>
+<td class="line" id="L224"><a href="#L224">224</a></td>
+<td class="hits"></td>
+<td class="source"><code>%%------------------------------------------------------------------------------</code></td>
+</tr>
+<tr>
+<td class="line" id="L225"><a href="#L225">225</a></td>
+<td class="hits"></td>
+<td class="source"><code>-spec push_error_details(kz_term:ne_binary()) -&gt; {pos_integer(), kz_term:ne_binary()}.</code></td>
+</tr>
+<tr>
+<td class="line" id="L226"><a href="#L226">226</a></td>
+<td class="hits"></td>
+<td class="source"><code>push_error_details(&lt;&lt;"MissingRegistration"&gt;&gt;) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L227"><a href="#L227">227</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    lager:error("missing registration ID in request"),</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L228"><a href="#L228">228</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {500, &lt;&lt;"Check that the request contains a registration token."&gt;&gt;};</code></td>
+</tr>
+<tr>
+<td class="line" id="L229"><a href="#L229">229</a></td>
+<td class="hits"></td>
+<td class="source"><code>push_error_details(&lt;&lt;"InvalidRegistration"&gt;&gt;) -&gt;</code></td>
+</tr>
+<tr>
+<td class="line" id="L230"><a href="#L230">230</a></td>
+<td class="hits"></td>
+<td class="source"><code>    %% Could be that the device doc was updated with an invalid token</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L231"><a href="#L231">231</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {200, &lt;&lt;"Check the format of the registration token you pass to the server."&gt;&gt;};</code></td>
+</tr>
+<tr>
+<td class="line" id="L232"><a href="#L232">232</a></td>
+<td class="hits"></td>
+<td class="source"><code>push_error_details(&lt;&lt;"NotRegistered"&gt;&gt;) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L233"><a href="#L233">233</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {200, &lt;&lt;"Remove this registration token and stop using it to send messages."&gt;&gt;};</code></td>
+</tr>
+<tr>
+<td class="line" id="L234"><a href="#L234">234</a></td>
+<td class="hits"></td>
+<td class="source"><code>push_error_details(&lt;&lt;"InvalidPackageName"&gt;&gt;) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L235"><a href="#L235">235</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {400, &lt;&lt;"Make sure the message was addressed to a registration token whose package name matches the value passed in the request."&gt;&gt;};</code></td>
+</tr>
+<tr>
+<td class="line" id="L236"><a href="#L236">236</a></td>
+<td class="hits"></td>
+<td class="source"><code>push_error_details(&lt;&lt;"MismatchSenderId"&gt;&gt;) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L237"><a href="#L237">237</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {400, &lt;&lt;"Not one of the senders allowed to send messages to this registration token"&gt;&gt;};</code></td>
+</tr>
+<tr>
+<td class="line" id="L238"><a href="#L238">238</a></td>
+<td class="hits"></td>
+<td class="source"><code>push_error_details(&lt;&lt;"InvalidParameters"&gt;&gt;) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L239"><a href="#L239">239</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {400, &lt;&lt;"Check that the provided parameters have the right name and type."&gt;&gt;};</code></td>
+</tr>
+<tr>
+<td class="line" id="L240"><a href="#L240">240</a></td>
+<td class="hits"></td>
+<td class="source"><code>push_error_details(&lt;&lt;"MessageTooBig"&gt;&gt;) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L241"><a href="#L241">241</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {400, &lt;&lt;"Total size of the payload data included in the message exceeds FCM limits"&gt;&gt;};</code></td>
+</tr>
+<tr>
+<td class="line" id="L242"><a href="#L242">242</a></td>
+<td class="hits"></td>
+<td class="source"><code>push_error_details(&lt;&lt;"InvalidDataKey"&gt;&gt;) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L243"><a href="#L243">243</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {400, &lt;&lt;"Check that the payload data does not contain a key that is used internally by FCM."&gt;&gt;};</code></td>
+</tr>
+<tr>
+<td class="line" id="L244"><a href="#L244">244</a></td>
+<td class="hits"></td>
+<td class="source"><code>push_error_details(&lt;&lt;"InvalidTtl"&gt;&gt;) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L245"><a href="#L245">245</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {400, &lt;&lt;"TTL must be between 0 and 2,419,200 seconds (4 weeks)"&gt;&gt;};</code></td>
+</tr>
+<tr>
+<td class="line" id="L246"><a href="#L246">246</a></td>
+<td class="hits"></td>
+<td class="source"><code>push_error_details(&lt;&lt;"Unavailable"&gt;&gt;) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L247"><a href="#L247">247</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {500, &lt;&lt;"The server couldn't process the request in time."&gt;&gt;};</code></td>
+</tr>
+<tr>
+<td class="line" id="L248"><a href="#L248">248</a></td>
+<td class="hits"></td>
+<td class="source"><code>push_error_details(&lt;&lt;"InternalServerError"&gt;&gt;) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L249"><a href="#L249">249</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {500, &lt;&lt;"The server encountered an error while trying to process the request."&gt;&gt;};</code></td>
+</tr>
+<tr>
+<td class="line" id="L250"><a href="#L250">250</a></td>
+<td class="hits"></td>
+<td class="source"><code>push_error_details(&lt;&lt;"DeviceMessageRateExceeded"&gt;&gt;) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L251"><a href="#L251">251</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {429, &lt;&lt;"Rate of messages to the device is too high"&gt;&gt;};</code></td>
+</tr>
+<tr>
+<td class="line" id="L252"><a href="#L252">252</a></td>
+<td class="hits"></td>
+<td class="source"><code>push_error_details(&lt;&lt;"TopicsMessageRateExceeded"&gt;&gt;) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L253"><a href="#L253">253</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {429, &lt;&lt;"Rate of messages to the topic is too high"&gt;&gt;};</code></td>
+</tr>
+<tr>
+<td class="line" id="L254"><a href="#L254">254</a></td>
+<td class="hits"></td>
+<td class="source"><code>push_error_details(&lt;&lt;"InvalidApnsCredential"&gt;&gt;) -&gt;</code></td>
+</tr>
+<tr class="miss">
+<td class="line" id="L255"><a href="#L255">255</a></td>
+<td class="hits"><pre style="display: inline;">:-(</pre></td>
+<td class="source"><code>    {400, &lt;&lt;"Missing or expired APNs authentication key"&gt;&gt;}.</code></td>
+</tr>
+</tbody>
+<thead>
+<tr>
+<th>Line</th>
+<th>Hits</th>
+<th>Source</th>
+</tr>
+</thead>
+</table>
+</body>
+</html>
