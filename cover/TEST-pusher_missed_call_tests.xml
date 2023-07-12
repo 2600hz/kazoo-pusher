@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuite tests="4" failures="0" errors="0" skipped="0" time="0.012" name="module 'pusher_missed_call_tests'">
+  <testcase time="0.000" name="pusher_missed_call_tests:45 find_owner_id_test_">
+    <system-out>
+    </system-out>
+  </testcase>
+  <testcase time="0.000" name="pusher_missed_call_tests:46 find_owner_id_test_">
+    <system-out>
+    </system-out>
+  </testcase>
+  <testcase time="0.000" name="pusher_missed_call_tests:47 find_owner_id_test_">
+    <system-out>
+    </system-out>
+  </testcase>
+  <testcase time="0.000" name="pusher_missed_call_tests:48 find_owner_id_test_">
+    <system-out>
+    </system-out>
+  </testcase>
+</testsuite>
