@@ -91,7 +91,7 @@ to_endpoint_push_req_test_() ->
               EPReq1 = kz_json:delete_keys(props:get_keys(Values)
                                           ,pusher_listener:to_endpoint_push_req(Req1, PMMod)
                                           ),
-              ?assertEqual(EPReq, copy_unix_timestamp(EPReq, EPReq1))
+              ?assertEqual(EPReq, EPReq1)
       end
      }
     ].
@@ -100,10 +100,4 @@ add_unix_timestamp(EPReq, Data) ->
     kz_json:set_value(<<"utc_unix_timestamp_ms">>
                      ,kz_term:to_binary(pusher_util:timestamp_ms(EPReq))
                      ,Data
-                     ).
-
-copy_unix_timestamp(EPReq, EPReq1) ->
-    kz_json:set_value([<<"Data">>,<<"utc_unix_timestamp_ms">>]
-                     ,kz_json:get_value([<<"Data">>,<<"utc_unix_timestamp_ms">>], EPReq)
-                     ,EPReq1
                      ).

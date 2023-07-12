@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" ?>
-<testsuite tests="1" failures="0" errors="0" skipped="0" time="0.006" name="module 'pusher_module_util'">
-  <testcase time="0.003" name="pusher_module_util_tests:0 build_payload_test (module 'pusher_module_util_tests')">
-    <system-out>
-    </system-out>
-  </testcase>
-</testsuite>
