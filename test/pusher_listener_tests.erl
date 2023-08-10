@@ -104,9 +104,11 @@ add_unix_timestamp(EPReq, Data) ->
 
 copy_unix_timestamp(EPReq, EPReq1) ->
     kz_json:set_values([{[<<"Data">>,<<"utc_unix_timestamp_ms">>]
-                        ,kz_json:get_value([<<"Data">>,<<"utc_unix_timestamp_ms">>], EPReq)}
+                        ,kz_json:get_binary_value([<<"Data">>,<<"utc_unix_timestamp_ms">>], EPReq)
+                        }
                        ,{<<"Timestamp-MS">>
-                        ,kz_json:get_value(<<"Timestamp-MS">>, EPReq)}
+                        ,kz_json:get_integer_value(<<"Timestamp-MS">>, EPReq)
+                        }
                        ]
                       ,EPReq1
                       ).
