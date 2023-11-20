@@ -44,3 +44,4 @@ metapackage:
     branch: '5.2'
     package: kazoo-application-pusher
 dependencies: null
+
