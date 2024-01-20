@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2023, 2600Hz
+%%% @copyright (C) 2024, 2600Hz
 %%% @doc `pusher_listener' tests
 %%%
 %%% This Source Code Form is subject to the terms of the Mozilla Public
@@ -18,12 +18,15 @@
 %%%=============================================================================
 
 %%------------------------------------------------------------------------------
-%% @doc Test finding a user ID in a callflow `flow`
+%% @doc Test finding a endpoint ID in a callflow
 %% @end
 %%------------------------------------------------------------------------------
 find_owner_id_test_() ->
     UserId = kz_binary:rand_hex(16),
-    Flow = kz_json:from_list([{<<"module">>, <<"user">>}
+    EndpointList = [<<"user">>,<<"device">>],
+    Flow = kz_json:from_list([{<<"module">>, lists:nth(rand:uniform(length(EndpointList))
+                                                                    ,EndpointList
+                                                                    )}
                              ,{<<"data">>, kz_json:from_list([{<<"id">>, UserId}])}
                              ]),
 
@@ -42,8 +45,11 @@ find_owner_id_test_() ->
                                                                             ])}
                                         ]),
 
-    [?_assertMatch(UserId, pusher_missed_call_notification:find_owner_id(Flow))
-    ,?_assertMatch('undefined', pusher_missed_call_notification:find_owner_id(kz_json:new()))
-    ,?_assertMatch(UserId, pusher_missed_call_notification:find_owner_id(Nested))
-    ,?_assertMatch('undefined', pusher_missed_call_notification:find_owner_id(NestedUndefined))
+    [?_assertMatch(UserId, get_endpoint_id(pusher_missed_call_notification:find_endpoint_id(Flow)))
+    ,?_assertMatch('undefined', get_endpoint_id(pusher_missed_call_notification:find_endpoint_id(kz_json:new())))
+    ,?_assertMatch(UserId, get_endpoint_id(pusher_missed_call_notification:find_endpoint_id(Nested)))
+    ,?_assertMatch('undefined', get_endpoint_id(pusher_missed_call_notification:find_endpoint_id(NestedUndefined)))
     ].
+
+get_endpoint_id(Endpoint) ->
+    kz_json:get_value(<<"ID">>, Endpoint).

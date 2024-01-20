@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2023, 2600Hz
+%%% @copyright (C) 2024, 2600Hz
 %%% @doc
 %%% @author Wimal Dhammika
 %%%
@@ -15,7 +15,7 @@
 -export([start_link/0, handle_message/2]).
 
 -ifdef(TEST).
--export([find_owner_id/1]).
+-export([find_endpoint_id/1]).
 -endif.
 
 -export([init/1
@@ -153,22 +153,18 @@ code_change(_OldVsn, State, _Extra) ->
 -spec handle_message(kz_json:object(), state()) -> 'ok'.
 handle_message(JObj, _State) ->
     AccountId = kz_json:get_ne_binary_value(<<"Account-ID">>, JObj),
-    OwnerId = get_owner_id(JObj, AccountId),
+    Endpoint = get_endpoint(JObj, AccountId),
     Payload = kz_json:from_list_recursive([{<<"Account-ID">>, AccountId}
-                                          ,{<<"Endpoint">>
-                                           ,[{<<"ID">>, OwnerId}
-                                            ,{<<"Type">>, <<"user">>}
-                                            ]
-                                           }
+                                          ,{<<"Endpoint">> ,Endpoint}
                                           ,{<<"Data">>, generate_data(JObj)}
                                           | kz_api:default_headers(?APP_NAME, ?APP_VERSION)
                                           ]),
     kapi_pusher:publish_endpoint_push_req(Payload).
 
--spec get_owner_id(kz_json:object(), kz_term:ne_binary()) -> kz_term:ne_binary().
-get_owner_id(JObj, AccountId) ->
+-spec get_endpoint(kz_json:object(), kz_term:ne_binary()) -> kz_term:ne_binary().
+get_endpoint(JObj, AccountId) ->
     ToUser = kz_json:get_ne_binary_value(<<"To-User">>, JObj),
-    get_owner_id(JObj, AccountId
+    get_endpoint(JObj, AccountId
                 ,kz_datamgr:get_single_result(AccountId
                                              ,<<"callflows/listing_by_number">>
                                              ,[{'key', ToUser}
@@ -177,28 +173,38 @@ get_owner_id(JObj, AccountId) ->
                                              )
                 ).
 
-get_owner_id(_JObj, _AccountId, {'error', _E}) ->
+get_endpoint(_JObj, _AccountId, {'error', _E}) ->
     ToUser = kz_json:get_ne_binary_value(<<"To-User">>, _JObj),
     lager:info("failed to find callflow for ~s: ~p", [ToUser, _E]),
     'undefined';
-get_owner_id(_JObj, _AccountId, {'ok', CallflowJObj}) ->
-    find_owner_id(kz_json:get_json_value([<<"doc">>, <<"flow">>], CallflowJObj)).
+get_endpoint(_JObj, _AccountId, {'ok', CallflowJObj}) ->
+    find_endpoint_id(kz_json:get_json_value([<<"doc">>, <<"flow">>], CallflowJObj)).
 
--spec find_owner_id(kz_json:object()) -> kz_term:api_ne_binary().
-find_owner_id(FlowJObj) ->
-    find_owner_id(FlowJObj, flow_module(FlowJObj)).
+-spec find_endpoint_id(kz_json:object()) -> kz_term:api_ne_binary().
+find_endpoint_id(FlowJObj) ->
+    find_endpoint_id(FlowJObj, flow_module(FlowJObj)).
 
-find_owner_id(FlowJObj, <<"user">>) ->
-    kz_json:get_ne_binary_value([<<"data">>, <<"id">>], FlowJObj);
-find_owner_id(FlowJObj, _Action) ->
-    find_owner_id_in_children(flow_children(FlowJObj)).
-
-find_owner_id_in_children([]) -> 'undefined';
-find_owner_id_in_children([Child | Children]) ->
-    case find_owner_id(Child) of
-        'undefined' -> find_owner_id_in_children(Children);
-        OwnerId -> OwnerId
+find_endpoint_id(FlowJObj, EPType)->
+    case (EPType==<<"user">>
+            orelse EPType==<<"device">>)
+    of
+        'true' ->
+            build_endpoint(EPType, kz_json:get_ne_binary_value([<<"data">>, <<"id">>], FlowJObj));
+        'false' ->
+            find_endpoint_id_in_children(flow_children(FlowJObj))
     end.
+
+find_endpoint_id_in_children([]) -> 'undefined';
+find_endpoint_id_in_children([Child | Children]) ->
+    case find_endpoint_id(Child) of
+        'undefined' -> find_endpoint_id_in_children(Children);
+        EndpointId -> EndpointId
+    end.
+
+build_endpoint(Type, Id) ->
+    kz_json:from_list([{<<"Type">>, Type}
+                      ,{<<"ID">>, Id}
+                      ]).
 
 flow_module(FlowJObj) ->
     kz_json:get_ne_binary_value(<<"module">>, FlowJObj).
