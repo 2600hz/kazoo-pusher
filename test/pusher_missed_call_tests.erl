@@ -25,8 +25,8 @@ find_owner_id_test_() ->
     UserId = kz_binary:rand_hex(16),
     EndpointList = [<<"user">>,<<"device">>],
     Flow = kz_json:from_list([{<<"module">>, lists:nth(rand:uniform(length(EndpointList))
-                                                                    ,EndpointList
-                                                                    )}
+                                                      ,EndpointList
+                                                      )}
                              ,{<<"data">>, kz_json:from_list([{<<"id">>, UserId}])}
                              ]),
 
