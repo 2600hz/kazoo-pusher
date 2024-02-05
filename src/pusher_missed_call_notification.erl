@@ -15,7 +15,7 @@
 -export([start_link/0, handle_message/2]).
 
 -ifdef(TEST).
--export([find_endpoint_id/1]).
+-export([find_endpoint_object/1]).
 -endif.
 
 -export([init/1
@@ -161,7 +161,7 @@ handle_message(JObj, _State) ->
                                           ]),
     kapi_pusher:publish_endpoint_push_req(Payload).
 
--spec get_endpoint(kz_json:object(), kz_term:ne_binary()) -> kz_term:ne_binary().
+-spec get_endpoint(kz_json:object(), kz_term:ne_binary()) -> kz_json:object().
 get_endpoint(JObj, AccountId) ->
     ToUser = kz_json:get_ne_binary_value(<<"To-User">>, JObj),
     get_endpoint(JObj, AccountId
@@ -178,27 +178,27 @@ get_endpoint(_JObj, _AccountId, {'error', _E}) ->
     lager:info("failed to find callflow for ~s: ~p", [ToUser, _E]),
     'undefined';
 get_endpoint(_JObj, _AccountId, {'ok', CallflowJObj}) ->
-    find_endpoint_id(kz_json:get_json_value([<<"doc">>, <<"flow">>], CallflowJObj)).
+    find_endpoint_object(kz_json:get_json_value([<<"doc">>, <<"flow">>], CallflowJObj)).
 
--spec find_endpoint_id(kz_json:object()) -> kz_term:api_ne_binary().
-find_endpoint_id(FlowJObj) ->
-    find_endpoint_id(FlowJObj, flow_module(FlowJObj)).
+-spec find_endpoint_object(kz_json:object()) -> kz_json:object().
+find_endpoint_object(FlowJObj) ->
+    find_endpoint_object(FlowJObj, flow_module(FlowJObj)).
 
-find_endpoint_id(FlowJObj, EPType)->
-    case (EPType==<<"user">>
-            orelse EPType==<<"device">>)
+find_endpoint_object(FlowJObj, EPType)->
+    case EPType=:=<<"user">>
+            orelse EPType=:=<<"device">>
     of
         'true' ->
             build_endpoint(EPType, kz_json:get_ne_binary_value([<<"data">>, <<"id">>], FlowJObj));
         'false' ->
-            find_endpoint_id_in_children(flow_children(FlowJObj))
+            find_endpoint_object_in_children(flow_children(FlowJObj))
     end.
 
-find_endpoint_id_in_children([]) -> 'undefined';
-find_endpoint_id_in_children([Child | Children]) ->
-    case find_endpoint_id(Child) of
-        'undefined' -> find_endpoint_id_in_children(Children);
-        EndpointId -> EndpointId
+find_endpoint_object_in_children([]) -> 'undefined';
+find_endpoint_object_in_children([Child | Children]) ->
+    case find_endpoint_object(Child) of
+        'undefined' -> find_endpoint_object_in_children(Children);
+        EndpointObject -> EndpointObject
     end.
 
 build_endpoint(Type, Id) ->
