@@ -45,10 +45,10 @@ find_owner_id_test_() ->
                                                                             ])}
                                         ]),
 
-    [?_assertMatch(UserId, get_endpoint_id(pusher_missed_call_notification:find_endpoint_id(Flow)))
-    ,?_assertMatch('undefined', get_endpoint_id(pusher_missed_call_notification:find_endpoint_id(kz_json:new())))
-    ,?_assertMatch(UserId, get_endpoint_id(pusher_missed_call_notification:find_endpoint_id(Nested)))
-    ,?_assertMatch('undefined', get_endpoint_id(pusher_missed_call_notification:find_endpoint_id(NestedUndefined)))
+    [?_assertMatch(UserId, get_endpoint_id(pusher_missed_call_notification:find_endpoint_object(Flow)))
+    ,?_assertMatch('undefined', get_endpoint_id(pusher_missed_call_notification:find_endpoint_object(kz_json:new())))
+    ,?_assertMatch(UserId, get_endpoint_id(pusher_missed_call_notification:find_endpoint_object(Nested)))
+    ,?_assertMatch('undefined', get_endpoint_id(pusher_missed_call_notification:find_endpoint_object(NestedUndefined)))
     ].
 
 get_endpoint_id(Endpoint) ->
