@@ -22,12 +22,12 @@
 %% @end
 %%------------------------------------------------------------------------------
 find_owner_id_test_() ->
-    UserId = kz_binary:rand_hex(16),
+    EndpointId = kz_binary:rand_hex(16),
     EndpointList = [<<"user">>,<<"device">>],
     Flow = kz_json:from_list([{<<"module">>, lists:nth(rand:uniform(length(EndpointList))
                                                       ,EndpointList
                                                       )}
-                             ,{<<"data">>, kz_json:from_list([{<<"id">>, UserId}])}
+                             ,{<<"data">>, kz_json:from_list([{<<"id">>, EndpointId}])}
                              ]),
 
     Nested = kz_json:from_list([{<<"module">>, <<?MODULE_STRING>>}
@@ -45,11 +45,11 @@ find_owner_id_test_() ->
                                                                             ])}
                                         ]),
 
-    [?_assertMatch(UserId, get_endpoint_id(pusher_missed_call_notification:find_endpoint_object(Flow)))
+    [?_assertMatch(EndpointId, get_endpoint_id(pusher_missed_call_notification:find_endpoint_object(Flow)))
     ,?_assertMatch('undefined', get_endpoint_id(pusher_missed_call_notification:find_endpoint_object(kz_json:new())))
-    ,?_assertMatch(UserId, get_endpoint_id(pusher_missed_call_notification:find_endpoint_object(Nested)))
+    ,?_assertMatch(EndpointId, get_endpoint_id(pusher_missed_call_notification:find_endpoint_object(Nested)))
     ,?_assertMatch('undefined', get_endpoint_id(pusher_missed_call_notification:find_endpoint_object(NestedUndefined)))
     ].
 
 get_endpoint_id(Endpoint) ->
-    kz_json:get_value(<<"ID">>, Endpoint).
+    kz_json:get_ne_binary_value(<<"ID">>, Endpoint).

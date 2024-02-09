@@ -161,7 +161,7 @@ handle_message(JObj, _State) ->
                                           ]),
     kapi_pusher:publish_endpoint_push_req(Payload).
 
--spec get_endpoint(kz_json:object(), kz_term:ne_binary()) -> kz_json:object().
+-spec get_endpoint(kz_json:object(), kz_term:ne_binary()) -> kz_term:api_object().
 get_endpoint(JObj, AccountId) ->
     ToUser = kz_json:get_ne_binary_value(<<"To-User">>, JObj),
     get_endpoint(JObj, AccountId
@@ -180,7 +180,7 @@ get_endpoint(_JObj, _AccountId, {'error', _E}) ->
 get_endpoint(_JObj, _AccountId, {'ok', CallflowJObj}) ->
     find_endpoint_object(kz_json:get_json_value([<<"doc">>, <<"flow">>], CallflowJObj)).
 
--spec find_endpoint_object(kz_json:object()) -> kz_json:object().
+-spec find_endpoint_object(kz_json:object()) -> kz_term:api_object().
 find_endpoint_object(FlowJObj) ->
     find_endpoint_object(FlowJObj, flow_module(FlowJObj)).
 
