@@ -154,8 +154,14 @@ code_change(_OldVsn, State, _Extra) ->
 handle_message(JObj, _State) ->
     AccountId = kz_json:get_ne_binary_value(<<"Account-ID">>, JObj),
     Endpoint = get_endpoint(JObj, AccountId),
+    publish_endpoint_push(Endpoint, AccountId, JObj).
+
+-spec publish_endpoint_push(kz_term:api_object(), kz_term:ne_binary(), kz_json:object()) -> 'ok'.
+publish_endpoint_push('undefined', _AccountId, _JObj) ->
+    'ok';
+publish_endpoint_push(Endpoint, AccountId, JObj) ->
     Payload = kz_json:from_list_recursive([{<<"Account-ID">>, AccountId}
-                                          ,{<<"Endpoint">> ,Endpoint}
+                                          ,{<<"Endpoint">>, Endpoint}
                                           ,{<<"Data">>, generate_data(JObj)}
                                           | kz_api:default_headers(?APP_NAME, ?APP_VERSION)
                                           ]),
