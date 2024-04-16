@@ -1,20 +1,25 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2010-2023, 2600Hz
+%%% @copyright (C) 2010-2024, 2600Hz
 %%% @doc
 %%% This Source Code Form is subject to the terms of the Mozilla Public
 %%% License, v. 2.0. If a copy of the MPL was not distributed with this
 %%% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%%
+%%% @author Daniel Finke <danielfinke2011@gmail.com>
 %%% @end
 %%%-----------------------------------------------------------------------------
 -module(pm_apple).
 -behaviour(gen_server).
+-behaviour(pusher_module).
 
 -include("pusher.hrl").
 
 -define(SERVER, ?MODULE).
 
--export([start_link/0]).
+-export([start_link/0
+        ,enabled/1
+        ,push/4
+        ]).
 
 -export([init/1
         ,handle_call/3
@@ -67,9 +72,27 @@
                        ,K := header_v()
                        }.
 
+-type maybe_push_app() :: push_app() | 'undefined'.
+
 -spec start_link() -> kz_types:startlink_ret().
 start_link() ->
     gen_server:start_link({'local', ?SERVER}, ?MODULE, [],[]).
+
+%%------------------------------------------------------------------------------
+%% @doc Returns true if this service is enabled for the specified app.
+%% @end
+%%------------------------------------------------------------------------------
+-spec enabled(push_app_id()) -> boolean().
+enabled(App) ->
+    kapps_config:get_boolean(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"enabled">>], 'true', App).
+
+%%------------------------------------------------------------------------------
+%% @doc Send a push notification using this service.
+%% @end
+%%------------------------------------------------------------------------------
+-spec push(kz_term:ne_binary(), push_app_id(), token_type(), kz_json:object()) -> pusher_result:t().
+push(Token, TokenApp, _TokenType, JObj) ->
+    gen_server:call(?SERVER, {'push', Token, TokenApp, JObj}).
 
 -spec init([]) -> {'ok', state()}.
 init([]) ->
@@ -142,7 +165,7 @@ log_headers(Headers) ->
 %% @doc Send the push notification if a connection is established to APNs.
 %% @end
 %%------------------------------------------------------------------------------
--spec maybe_send_push_notification(push_app()
+-spec maybe_send_push_notification(maybe_push_app()
                                   ,kz_term:ne_binary()
                                   ,kz_term:ne_binary()
                                   ,kz_json:object()
@@ -216,14 +239,14 @@ reload_apns(App, ETS) ->
         _Push -> 'ok'
     end.
 
--spec get_apns(kz_term:ne_binary(), ets:tid()) -> push_app().
+-spec get_apns(kz_term:ne_binary(), ets:tid()) -> maybe_push_app().
 get_apns(App, ETS) ->
     case ets:lookup(ETS, App) of
         [] -> maybe_load_apns(App, ETS);
         [{App, Push}] -> Push
     end.
 
--spec maybe_load_apns(kz_term:ne_binary(), ets:tid()) -> push_app().
+-spec maybe_load_apns(kz_term:ne_binary(), ets:tid()) -> maybe_push_app().
 maybe_load_apns(App, ETS) ->
     CertBin = kapps_config:get_ne_binary(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"certificate">>], 'undefined', App),
     Host = kapps_config:get_ne_binary(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"host">>], ?DEFAULT_APNS_HOST, App),
@@ -236,7 +259,7 @@ maybe_load_apns(App, ETS) ->
                      ,kz_term:api_ne_binary()
                      ,kz_term:ne_binary()
                      ,map()
-                     ) -> push_app().
+                     ) -> maybe_push_app().
 maybe_load_apns(App, _, 'undefined', _, _) ->
     lager:debug("apple pusher certificate for app ~s not found", [App]),
     'undefined';

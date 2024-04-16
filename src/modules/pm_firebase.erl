@@ -1,20 +1,25 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2010-2023, 2600Hz
+%%% @copyright (C) 2010-2024, 2600Hz
 %%% @doc
 %%% This Source Code Form is subject to the terms of the Mozilla Public
 %%% License, v. 2.0. If a copy of the MPL was not distributed with this
 %%% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%%
+%%% @author Daniel Finke <danielfinke2011@gmail.com>
 %%% @end
 %%%-----------------------------------------------------------------------------
 -module(pm_firebase).
 -behaviour(gen_server).
+-behaviour(pusher_module).
 
 -include("pusher.hrl").
 
 -define(SERVER, ?MODULE).
 
--export([start_link/0]).
+-export([start_link/0
+        ,enabled/1
+        ,push/4
+        ]).
 
 -export([init/1
         ,handle_call/3
@@ -26,6 +31,10 @@
 
 -record(state, {tab :: ets:tid()}).
 -type state() :: #state{}.
+
+%% Number of times to retry push. Matches value from older version of
+%% `fcm-erlang'. Only used for the legacy API.
+-define(RETRIES, 3).
 
 -define(KEY_DATA, <<"data">>).
 -define(KEY_NOTIFICATION, <<"notification">>).
@@ -54,20 +63,52 @@
                            %% For `push_req` backwards-compatibility
                       ,<<"Call-ID">> => [?KEY_DATA, <<"Call-ID">>]
                       }).
+%% TODO: define mapping (https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages)
+-define(PAYLOAD_MAP_V1, #{}).
+
+-type active_push_app() :: {push_app(), token_type()}.
+-type maybe_active_push_app() :: active_push_app() | 'undefined'.
 
 -type reg_id() :: kz_term:ne_binary().
--type fcm_response() :: [{reg_id()
-                         ,'ok' |
-                          {kz_term:ne_binary(), reg_id()} |
-                          kz_term:ne_binary()
-                         },...] |
-                        {'error'
-                        ,'auth_error' | 'retry' | 'timeout' | kz_term:ne_binary()
-                        }.
+-type fcm_response() :: fcm_response_legacy() | fcm_response_v1().
+-type fcm_response_legacy() :: [{reg_id()
+                                ,'ok' |
+                                 {kz_term:ne_binary(), reg_id()} |
+                                 kz_term:ne_binary()
+                                },...] |
+                               {'error'
+                               ,'auth_error' | 'retry' | 'timeout' | kz_term:ne_binary()
+                               }.
+-type fcm_response_v1() :: [{reg_id()
+                            ,{'ok', kz_term:ne_binary()} |
+                             {'error', {non_neg_integer(), binary()}} | %% FCM errors
+                             {'error', any()} %% `httpc' errors
+                            },...].
 
 -spec start_link() -> kz_types:startlink_ret().
 start_link() ->
     gen_server:start_link({'local', ?SERVER}, ?MODULE, [],[]).
+
+%%------------------------------------------------------------------------------
+%% @doc Returns true if this service is enabled for the specified app. If either
+%% legacy or V1 is enabled, consider the service as a whole enabled. Clients can
+%% receive messages from V1 even if they previously got them from the legacy
+%% API.
+%% @end
+%%------------------------------------------------------------------------------
+-spec enabled(push_app_id()) -> boolean().
+enabled(App) ->
+    L = kapps_config:get_boolean(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE, <<"enabled">>], 'true', App),
+    V1 = kapps_config:get_boolean(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE_V1, <<"enabled">>], 'true', App),
+    L orelse V1.
+
+%%------------------------------------------------------------------------------
+%% @doc Send a push notification using this service.
+%% @end
+%%------------------------------------------------------------------------------
+-spec push(kz_term:ne_binary(), push_app_id(), token_type(), kz_json:object()) -> pusher_result:t().
+push(Token, TokenApp, TokenType, JObj) ->
+    gen_server:call(?SERVER, {'push', Token, TokenApp, TokenType, JObj}).
 
 -spec init([]) -> {'ok', state()}.
 init([]) ->
@@ -76,9 +117,10 @@ init([]) ->
     {'ok', #state{tab=ets:new(?MODULE, [])}}.
 
 -spec handle_call(any(), kz_term:pid_ref(), state()) -> kz_types:handle_call_ret_state(state()).
-handle_call({'push', Token, TokenApp, JObj}, _From, #state{tab=ETS}=State) ->
+handle_call({'push', Token, TokenApp, TokenType, JObj}, _From, #state{tab=ETS}=State) ->
     kz_log:put_callid(JObj),
-    Reply = maybe_send_push_notification(get_fcm(TokenApp, ETS), Token, JObj),
+    ActivePushApp = get_fcm(TokenApp, TokenType, ETS),
+    Reply = maybe_send_push_notification(ActivePushApp, Token, JObj),
     {'reply', Reply, State};
 handle_call(_Request, _From, State) ->
     {'reply', {'error', 'not_implemented'}, State}.
@@ -108,64 +150,119 @@ code_change(_OldVsn, State, _Extra) ->
 %% @doc Send the push notification if an FCM worker is running.
 %% @end
 %%------------------------------------------------------------------------------
--spec maybe_send_push_notification(push_app(), reg_id(), kz_json:object()) ->
-          pusher_result:t().
+-spec maybe_send_push_notification(active_push_app(), reg_id(), kz_json:object()) -> pusher_result:t().
 maybe_send_push_notification('undefined', _, _) ->
     lager:debug("no pid to send push"),
     pusher_result:internal_server_error(<<"No FCM connection">>);
-maybe_send_push_notification({Pid, Envelope}, TokenID, JObj) ->
+maybe_send_push_notification({{Pid, Envelope}, ActiveTokenType}, TokenID, JObj) ->
     {CustomData, JObj1} = pusher_module_util:extract_custom_data(JObj),
 
-    Message = build_message(JObj1, CustomData, Envelope),
+    Message = build_message(JObj1, CustomData, Envelope, ActiveTokenType),
 
     lager:debug("pushing to ~p: ~s: ~p", [Pid, TokenID, Message]),
 
-    Result = fcm:sync_push(Pid, [TokenID], Message),
+    Result = fcm:push(Pid, TokenID, Message, ?RETRIES),
     to_pusher_result(Result).
 
 %%------------------------------------------------------------------------------
 %% @doc Build the FCM message payload.
 %% @end
 %%------------------------------------------------------------------------------
--spec build_message(kz_json:object(), map(), map()) -> map().
-build_message(JObj, CustomData, Envelope) ->
+-spec build_message(kz_json:object(), map(), map(), token_type()) -> map().
+build_message(JObj, CustomData, Envelope, ActiveTokenType) ->
     FlatProps = kz_json:to_proplist(kz_json:flatten(JObj)),
+    Map = case ActiveTokenType of
+              ?TOKEN_TYPE_FIREBASE -> ?PAYLOAD_MAP;
+              ?TOKEN_TYPE_FIREBASE_V1 -> ?PAYLOAD_MAP_V1
+          end,
     Message = pusher_module_util:build_payload(
-                FlatProps, JObj, ?PAYLOAD_MAP, #{?KEY_DATA => CustomData}
+                %% TODO: flatten `data' for V1 - need to compare to legacy
+                %% output. Supposedly legacy didn't support nested data either,
+                %% but it accepted it. Match what was received on device for
+                %% legacy API payloads.
+                FlatProps, JObj, Map, #{?KEY_DATA => CustomData}
                ),
     kz_maps:merge(Message, Envelope).
 
--spec get_fcm(kz_term:ne_binary(), ets:tid()) -> push_app().
-get_fcm(App, ETS) ->
-    case ets:lookup(ETS, App) of
-        [] -> maybe_load_fcm(App, ETS);
-        [{App, Push}] -> Push
+-spec get_fcm(push_app_id(), token_type(), ets:tid()) -> maybe_active_push_app().
+get_fcm(App, TokenType, ETS) ->
+    case ets:lookup(ETS, {App, TokenType}) of
+        [] -> maybe_load_fcm(App, TokenType, ETS);
+        [{{App, TokenType}, Active}] -> Active
     end.
 
--spec maybe_load_fcm(kz_term:ne_binary(), ets:tid()) -> push_app().
-maybe_load_fcm(App, ETS) ->
-    lager:debug("loading fcm secret for ~s", [App]),
-    FCMSecret = kapps_config:get_binary(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE, <<"api_key">>], <<>>, App),
-    EnvelopeJObj = kapps_config:get_json(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE, <<"headers">>], kz_json:new(), App),
-    Envelope = kz_json:to_map(EnvelopeJObj),
-    maybe_load_fcm(App, ETS, FCMSecret, Envelope).
-
--spec maybe_load_fcm(kz_term:ne_binary(), ets:tid(), binary(), map()) -> push_app().
-maybe_load_fcm(App, _ETS, <<>>, _Envelope) ->
-    lager:debug("firebase pusher api_key for app ~s not found", [App]),
-    'undefined';
-maybe_load_fcm(App, ETS, APIKey, Envelope) ->
-    case fcm:start(kz_term:to_atom(<<"fcm_", App/binary>>, 'true'), kz_term:to_list(APIKey)) of
-        {'ok', Pid} ->
-            ets:insert(ETS, {App, {Pid, Envelope}}),
-            {Pid, Envelope};
-        {'error', {'already_started', Pid}} ->
-            ets:insert(ETS, {App, {Pid, Envelope}}),
-            {Pid, Envelope};
+-spec maybe_load_fcm(push_app_id(), token_type(), ets:tid()) -> maybe_active_push_app().
+maybe_load_fcm(App, TokenType, ETS) ->
+    lager:debug("loading FCM config for ~s (type ~s)", [App, TokenType]),
+    case maybe_start_pool(App, TokenType) of
+        {'ok', Active} ->
+            %% Map the requested app/token type to the FCM PID and which token
+            %% type is actually to be used
+            ets:insert(ETS, {{App, TokenType}, Active}),
+            Active;
+        {'error', 'not_found'} ->
+            'undefined';
         {'error', Reason} ->
-            lager:error("error loading fcm ~p", [Reason]),
+            lager:error("error loading FCM: ~p", [Reason]),
             'undefined'
     end.
+
+-spec maybe_start_pool(push_app_id(), token_type()) -> kz_either:either(any(), active_push_app()).
+maybe_start_pool(App, ?TOKEN_TYPE_FIREBASE_V1) ->
+    %% Allow clients to opt-in early to exclusively V1 while legacy pool runs
+    maybe_start_v1_pool(App);
+maybe_start_pool(App, ?TOKEN_TYPE_FIREBASE) ->
+    %% If legacy pool isn't started, try V1 in case it has been configured
+    case maybe_start_v1_pool(App) of
+        {'ok', _}=Ret -> Ret;
+        {'error', 'not_found'} -> maybe_start_legacy_pool(App);
+        {'error', _}=E -> E
+    end.
+
+-spec maybe_start_v1_pool(push_app_id()) -> kz_either:either(any(), active_push_app()).
+maybe_start_v1_pool(App) ->
+    case kapps_config:get_json(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE_V1, <<"service_account">>], 'undefined', App) of
+        'undefined' ->
+            lager:debug("firebase pusher service_account for app ~s not found", [App]),
+            {'error', 'not_found'};
+        ServiceAccountData -> start_v1_pool(App, ServiceAccountData)
+    end.
+
+-spec maybe_start_legacy_pool(push_app_id()) -> kz_either:either(any(), active_push_app()).
+maybe_start_legacy_pool(App) ->
+    case kapps_config:get_ne_binary(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE, <<"api_key">>], 'undefined', App) of
+        'undefined' ->
+            lager:debug("firebase pusher api_key for app ~s not found", [App]),
+            {'error', 'not_found'};
+        APIKey -> start_legacy_pool(App, APIKey)
+    end.
+
+-spec start_v1_pool(push_app_id(), kz_json:object()) -> kz_either:either(any(), active_push_app()).
+start_v1_pool(App, ServiceAccountData) ->
+    Name = pool_name(App, 'v1'),
+    ServiceAccountBin = kz_json:encode(ServiceAccountData),
+    EnvelopeJObj = kapps_config:get_json(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE_V1, <<"headers">>], kz_json:new(), App),
+    Envelope = kz_json:to_map(EnvelopeJObj),
+    case fcm:start_pool_with_json_service_file_bin(Name, ServiceAccountBin) of
+        {'ok', Pid} -> {'ok', {{Pid, Envelope}, ?TOKEN_TYPE_FIREBASE_V1}};
+        {'error', {'already_started', Pid}} -> {'ok', {{Pid, Envelope}, ?TOKEN_TYPE_FIREBASE_V1}};
+        {'error', _}=E -> E
+    end.
+
+-spec start_legacy_pool(push_app_id(), kz_term:ne_binary()) -> kz_either:either(any(), active_push_app()).
+start_legacy_pool(App, APIKey) ->
+    Name = pool_name(App, 'legacy'),
+    EnvelopeJObj = kapps_config:get_json(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE, <<"headers">>], kz_json:new(), App),
+    Envelope = kz_json:to_map(EnvelopeJObj),
+    case fcm:start_pool_with_api_key(Name, kz_term:to_list(APIKey)) of
+        {'ok', Pid} -> {'ok', {{Pid, Envelope}, ?TOKEN_TYPE_FIREBASE}};
+        {'error', {'already_started', Pid}} -> {'ok', {{Pid, Envelope}, ?TOKEN_TYPE_FIREBASE}};
+        {'error', _}=E -> E
+    end.
+
+-spec pool_name(push_app_id(), 'v1' | 'legacy') -> atom().
+pool_name(App, Version) ->
+    kz_term:to_atom(<<"fcm_", (kz_term:to_binary(Version))/binary, "_", App/binary>>, 'true').
 
 %%------------------------------------------------------------------------------
 %% @doc Set the home screen badge value.
@@ -193,12 +290,25 @@ adjusted_priority(Priority) -> Priority.
 
 %%------------------------------------------------------------------------------
 %% @doc Convert an FCM response into a `pusher_result'. See
-%% [https://firebase.google.com/docs/cloud-messaging/http-server-ref#interpret-downstream].
+%% [https://firebase.google.com/docs/cloud-messaging/http-server-ref#interpret-downstream]
+%% and
+%% [https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages/send].
 %% Results list length should always be 1 since we are only sending to one
 %% registration ID at a time.
 %% @end
 %%------------------------------------------------------------------------------
 -spec to_pusher_result(fcm_response()) -> pusher_result:t().
+to_pusher_result([{_RegId, {'ok', _MsgId}}]) ->
+    pusher_result:success();
+to_pusher_result([{_RegId, {'error', {StatusCode, Result}}}]) ->
+    ResultJObj = kz_json:decode(Result),
+    Error = kz_json:get_json_value(<<"error">>, ResultJObj, kz_json:new()),
+    pusher_result:new(StatusCode
+                     ,kz_json:get_ne_binary_value(<<"status">>, Error)
+                     ,kz_json:get_ne_binary_value(<<"message">>, Error)
+                     );
+to_pusher_result([{_RegId, {'error', Reason}}]) ->
+    pusher_result:internal_server_error(kz_term:to_binary(Reason));
 to_pusher_result([{_RegId, Result}]) when Result =:= 'ok'; tuple_size(Result) =:= 2 ->
     pusher_result:success();
 to_pusher_result([{_RegId, Error}]) ->
@@ -217,8 +327,8 @@ to_pusher_result({'error', Body}) ->
     pusher_result:bad_request(Body).
 
 %%------------------------------------------------------------------------------
-%% @doc Get the response code and error message corresponding to an FCM response
-%% error. See
+%% @doc Get the response code and error message corresponding to a legacy FCM
+%% API response error. See
 %% [https://firebase.google.com/docs/cloud-messaging/http-server-ref#error-codes].
 %% @end
 %%------------------------------------------------------------------------------
