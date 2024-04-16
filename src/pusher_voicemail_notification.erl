@@ -10,14 +10,12 @@
 -module(pusher_voicemail_notification).
 -behaviour(gen_listener).
 
--export([start_link/0]).
+-export([start_link/0, handle_message/2]).
 
 -export([init/1
         ,handle_call/3
         ,handle_cast/2
         ,handle_info/2
-        ,handle_event/2
-        ,handle_message/2
         ,terminate/2
         ,code_change/3
         ]).
@@ -34,10 +32,13 @@
                      }
                     ]).
 -define(BINDINGS, [{'presence', [{'restrict_to', ['mwi_update']}]}]).
+
 -define(QUEUE_NAME, <<"pusher_voicemail_listener">>).
 -define(QUEUE_OPTIONS, [{'exclusive', 'false'}]).
 -define(CONSUME_OPTIONS, [{'exclusive', 'false'}]).
 -define(PUSH_TYPE, <<"voicemail">>).
+-define(TITLE_KEY, <<"IC_VOICEMAIL_TITLE">>).
+-define(BODY_KEY, <<"IC_VOICEMAIL_BODY">>).
 
 %%%=============================================================================
 %%% API
@@ -69,7 +70,7 @@ start_link() ->
 %%------------------------------------------------------------------------------
 -spec init([]) -> {'ok', state()}.
 init([]) ->
-    kz_log:put_callid(<<?MODULE_STRING>>),
+    kz_log:put_callid(?MODULE),
     {'ok', #state{}}.
 
 %%------------------------------------------------------------------------------
@@ -100,14 +101,6 @@ handle_cast(_Msg, State) ->
 handle_info(_Info, State) ->
     lager:debug("unhandled message: ~p", [_Info]),
     {'noreply', State}.
-
-%%------------------------------------------------------------------------------
-%% @doc Allows listener to pass options to handlers.
-%% @end
-%%------------------------------------------------------------------------------
--spec handle_event(kz_json:object(), kz_term:proplist()) -> gen_listener:handle_event_return().
-handle_event(_JObj, _State) ->
-    {'reply', []}.
 
 %%------------------------------------------------------------------------------
 %% @doc This function is called by a `gen_server' when it is about to
@@ -154,6 +147,8 @@ handle_message(JObj, _Props) ->
                                                     ,{<<"Type">>, <<"user">>}
                                                     ]
                                                    }
+                                                  ,{<<"Alert">>, generate_alert(JObj)}
+                                                  ,{<<"Category">>, ?PUSH_TYPE}
                                                   ,{<<"Data">>, generate_data(JObj)}
                                                   | kz_api:default_headers(?APP_NAME, ?APP_VERSION)
                                                   ]),
@@ -180,6 +175,18 @@ get_owner_id(JObj, AccountDb) ->
                                                 ),
     VMBoxDoc = kz_json:get_json_value(<<"doc">>, VMBox),
     kzd_vmboxes:owner_id(VMBoxDoc).
+
+-spec generate_alert(kz_json:object()) -> kz_json:object().
+generate_alert(JObj) ->
+    %% e.g. title: New Voicemail in Box <To-User>
+    %% body: New: <new count> Saved: <saved count>
+    kz_json:from_list([{<<"Title-Key">>, ?TITLE_KEY}
+                      ,{<<"Title-Params">>, [kz_json:get_ne_binary_value(<<"To-User">>, JObj)]}
+                      ,{<<"Body-Key">>, ?BODY_KEY}
+                      ,{<<"Body-Params">>, [kz_json:get_ne_binary_value(<<"Messages-New">>, JObj)
+                                           ,kz_json:get_ne_binary_value(<<"Messages-Saved">>, JObj)
+                                           ]}
+                      ]).
 
 -spec generate_data(kz_json:object()) -> kz_json:object().
 generate_data(JObj) ->
