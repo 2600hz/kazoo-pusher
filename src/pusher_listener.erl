@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2013-2023, 2600Hz
+%%% @copyright (C) 2013-2024, 2600Hz
 %%% @doc
 %%% @author Luis Azedo
 %%%
@@ -161,19 +161,47 @@ maybe_update_push_token(AccountId, AuthorizingId, UA, JObj, Params) ->
     AccountDb = kzs_util:format_account_db(AccountId),
     case kz_datamgr:open_cache_doc(AccountDb, AuthorizingId) of
         {'ok', Doc} ->
-            Push = kzd_devices:push(Doc),
-            NewPush = build_push(UA, JObj, Params, kz_json:new()),
-            case kz_json:are_equal(Push, NewPush) of
-                'true' ->
-                    lager:debug("push not changed : ~s", [kz_json:encode(Push)]);
-                'false' ->
-                    lager:debug("setting push object for ~s: ~s: ~s", [AccountId, AuthorizingId, kz_json:encode(NewPush)]),
-                    case kz_datamgr:save_doc(AccountDb, kzd_devices:set_push(Doc, NewPush)) of
-                        {'ok', _} -> lager:debug("push object for ~s: ~s updated successfuly", [AccountId, AuthorizingId]);
-                        {'error', _Err} -> lager:warning("push object for ~s: ~s was not updated => ~p", [AccountId, AuthorizingId, _Err])
-                    end
+            set_push_object(AccountId, AuthorizingId, UA, JObj, Params, Doc, AccountDb);
+        {'error', 'not_found'} ->
+            EphemeralToken = kz_json:get_first_defined([[<<"Custom-Channel-Vars">>, <<"Endpoint-Token">>]
+                                                       ,<<"Endpoint-Token">>
+                                                       ], JObj),
+            case get_ephemeral_id(EphemeralToken) of
+                UpdatedAuthorizingId when is_binary(UpdatedAuthorizingId) ->
+                    case kz_datamgr:open_cache_doc(AccountDb, UpdatedAuthorizingId) of
+                        {'ok', Doc} -> set_push_object(AccountId, UpdatedAuthorizingId, UA, JObj, Params, Doc, AccountDb);
+                        {'error', _} -> lager:debug("failed to open doc relevant to ephemeral token~s in ~s", [UpdatedAuthorizingId, AccountId])
+                    end;
+                _->
+                    lager:debug("No associated Ephemeral token ~s in ~s", [AuthorizingId, AccountId])
             end;
         {'error', _} -> lager:debug("failed to open ~s in ~s", [AuthorizingId, AccountId])
+    end.
+
+-spec set_push_object(kz_term:api_binary(), kz_term:api_binary(), kz_json:object(), kz_json:object(), kz_term:proplist(), kz_json:object(), kz_term:ne_binary()) -> 'ok'.
+set_push_object(AccountId, AuthorizingId, UA, JObj, Params, DeviceDoc, AccountDb) ->
+    Push = kzd_devices:push(DeviceDoc),
+    NewPush = build_push(UA, JObj, Params, kz_json:new()),
+    case kz_json:are_equal(Push, NewPush) of
+        'true' ->
+            lager:debug("push not changed : ~s", [kz_json:encode(Push)]);
+        'false' ->
+            lager:debug("setting push object for ~s: ~s: ~s", [AccountId, AuthorizingId, kz_json:encode(NewPush)]),
+            case kz_datamgr:save_doc(AccountDb, kzd_devices:set_push(DeviceDoc, NewPush)) of
+                {'ok', _} -> lager:debug("push object for ~s: ~s updated successfuly", [AccountId, AuthorizingId]);
+                {'error', _Err} -> lager:warning("push object for ~s: ~s was not updated => ~p", [AccountId, AuthorizingId, _Err])
+            end
+    end.
+
+-spec get_ephemeral_id(kz_term:api_binary()) -> kz_term:api_binary().
+get_ephemeral_id(EphemeralToken) ->
+    lager:debug("Ephemeral Token ~p",[EphemeralToken]),
+    case kz_auth:validate_token(EphemeralToken) of
+        {'ok', JObj} ->
+            kz_json:get_value([<<"SIP-Info">>, <<"Endpoint-Meta-ID">>], JObj);
+        {'error', _Error} ->
+            lager:debug("error validating Ephemeral token : ~p",[_Error]),
+            'undefined'
     end.
 
 -spec build_push(kz_json:object(), kz_json:object(), kz_term:proplist(), kz_json:object()) ->
