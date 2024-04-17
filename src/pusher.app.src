@@ -1,5 +1,5 @@
 {application,pusher,
-             [{applications,[apns,fcm,kazoo_amqp,kazoo_apps,kazoo_data,
+             [{applications,[apns,fcm,kazoo_amqp,kazoo_apps,kazoo_auth,kazoo_data,
                              kazoo_documents,kazoo_endpoint,kazoo_sip,
                              kazoo_stdlib,kazoo_web,kernel,lager,public_key,
                              stdlib]},
