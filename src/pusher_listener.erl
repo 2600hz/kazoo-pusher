@@ -173,7 +173,7 @@ maybe_update_push_token(AccountId, AuthorizingId, UA, JObj, Params) ->
                         {'error', _} -> lager:debug("failed to open doc relevant to ephemeral token~s in ~s", [UpdatedAuthorizingId, AccountId])
                     end;
                 _->
-                    lager:debug("No associated Ephemeral token ~s in ~s", [AuthorizingId, AccountId])
+                    lager:debug("no associated ephemeral token ~s in ~s", [AuthorizingId, AccountId])
             end;
         {'error', _} -> lager:debug("failed to open ~s in ~s", [AuthorizingId, AccountId])
     end.
@@ -195,12 +195,12 @@ set_push_object(AccountId, AuthorizingId, UA, JObj, Params, DeviceDoc, AccountDb
 
 -spec get_ephemeral_id(kz_term:api_binary()) -> kz_term:api_binary().
 get_ephemeral_id(EphemeralToken) ->
-    lager:debug("Ephemeral Token ~p",[EphemeralToken]),
+    lager:debug("ephemeral token ~p",[EphemeralToken]),
     case kz_auth:validate_token(EphemeralToken) of
         {'ok', JObj} ->
             kz_json:get_value([<<"SIP-Info">>, <<"Endpoint-Meta-ID">>], JObj);
         {'error', _Error} ->
-            lager:debug("error validating Ephemeral token : ~p",[_Error]),
+            lager:debug("error validating ephemeral token : ~p",[_Error]),
             'undefined'
     end.
 
