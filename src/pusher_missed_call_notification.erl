@@ -22,7 +22,6 @@
         ,handle_call/3
         ,handle_cast/2
         ,handle_info/2
-        ,handle_event/2
         ,terminate/2
         ,code_change/3
         ]).
@@ -38,13 +37,14 @@
                      ,[{<<"notification">>, <<"missed_call">>}]
                      }
                     ]).
--define(BINDINGS, [{'notifications', [{'restrict_to', ['missed_call']}]}
-                  ]).
+-define(BINDINGS, [{'notifications', [{'restrict_to', ['missed_call']}]}]).
 
 -define(QUEUE_NAME, <<"pusher_missed_call_listener">>).
 -define(QUEUE_OPTIONS, [{'exclusive', 'false'}]).
 -define(CONSUME_OPTIONS, [{'exclusive', 'false'}]).
 -define(PUSH_TYPE, <<"missed_call">>).
+-define(TITLE_KEY, <<"IC_MISSED_CALL_TITLE">>).
+-define(BODY_KEY, <<"IC_MISSED_CALL_BODY">>).
 
 %%%=============================================================================
 %%% API
@@ -76,6 +76,7 @@ start_link() ->
 %%------------------------------------------------------------------------------
 -spec init([]) -> {'ok', state()}.
 init([]) ->
+    kz_log:put_callid(?MODULE),
     {'ok', #state{}}.
 
 %%------------------------------------------------------------------------------
@@ -92,10 +93,8 @@ handle_call(_Request, _From, State) ->
 %%------------------------------------------------------------------------------
 -spec handle_cast(any(), state()) -> kz_types:handle_cast_ret_state(state()).
 handle_cast({'gen_listener', {'created_queue', _QueueName}}, State) ->
-    kz_log:put_callid(?MODULE),
     {'noreply', State};
 handle_cast({'gen_listener', {'is_consuming', _IsConsuming}}, State) ->
-    kz_log:put_callid(?MODULE),
     {'noreply', State};
 handle_cast(_Msg, State) ->
     {'noreply', State}.
@@ -105,21 +104,9 @@ handle_cast(_Msg, State) ->
 %% @end
 %%------------------------------------------------------------------------------
 -spec handle_info(any(), state()) -> kz_types:handle_info_ret_state(state()).
-handle_info({'EXIT', _Pid, 'normal'}, State) ->
-    {'noreply', State};
 handle_info(_Info, State) ->
     lager:debug("unhandled message: ~p", [_Info]),
     {'noreply', State}.
-
-%%------------------------------------------------------------------------------
-%% @doc Allows listener to pass options to handlers.
-%% @end
-%%------------------------------------------------------------------------------
--spec handle_event(kz_json:object(), kz_term:proplist()) -> gen_listener:handle_event_return().
-handle_event(JObj, _State) ->
-    CallId = kz_log:find_callid(JObj),
-    lager:debug("instrumenting push for call_id ~p", [CallId]),
-    {'reply', []}.
 
 %%------------------------------------------------------------------------------
 %% @doc This function is called by a `gen_server' when it is about to
@@ -149,9 +136,8 @@ code_change(_OldVsn, State, _Extra) ->
 %% @doc
 %% @end
 %%------------------------------------------------------------------------------
-
--spec handle_message(kz_json:object(), state()) -> 'ok'.
-handle_message(JObj, _State) ->
+-spec handle_message(kz_json:object(), kz_term:proplist()) -> 'ok'.
+handle_message(JObj, _Props) ->
     AccountId = kz_json:get_ne_binary_value(<<"Account-ID">>, JObj),
     Endpoint = get_endpoint(JObj, AccountId),
     publish_endpoint_push(Endpoint, AccountId, JObj).
@@ -162,6 +148,8 @@ publish_endpoint_push('undefined', _AccountId, _JObj) ->
 publish_endpoint_push(Endpoint, AccountId, JObj) ->
     Payload = kz_json:from_list_recursive([{<<"Account-ID">>, AccountId}
                                           ,{<<"Endpoint">>, Endpoint}
+                                          ,{<<"Alert">>, generate_alert(JObj)}
+                                          ,{<<"Category">>, ?PUSH_TYPE}
                                           ,{<<"Data">>, generate_data(JObj)}
                                           | kz_api:default_headers(?APP_NAME, ?APP_VERSION)
                                           ]),
@@ -219,6 +207,17 @@ flow_children(FlowJObj) ->
     Children = kz_json:get_json_value(<<"children">>, FlowJObj, kz_json:new()),
     {Kids, _BranchKeys} = kz_json:get_values(Children),
     Kids.
+
+-spec generate_alert(kz_json:object()) -> kz_json:object().
+generate_alert(JObj) ->
+    %% e.g. title: New Missed Call
+    %% body: From <CID Name> (<CID Number>)
+    kz_json:from_list([{<<"Title-Key">>, ?TITLE_KEY}
+                      ,{<<"Body-Key">>, ?BODY_KEY}
+                      ,{<<"Body-Params">>, [kz_json:get_ne_binary_value(<<"Caller-ID-Name">>, JObj)
+                                           ,kz_json:get_ne_binary_value(<<"Caller-ID-Number">>, JObj)
+                                           ]}
+                      ]).
 
 -spec generate_data(kz_json:object()) -> kz_json:object().
 generate_data(JObj) ->
