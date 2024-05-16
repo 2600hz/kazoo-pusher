@@ -38,6 +38,7 @@
 
 -define(KEY_DATA, <<"data">>).
 -define(KEY_NOTIFICATION, <<"notification">>).
+-define(KEY_ANDROID, <<"android">>).
 
 -define(PAYLOAD_MAP, #{<<"Alert">> => #{<<"Title">> => [?KEY_NOTIFICATION, <<"title">>]
                                        ,<<"Subtitle">> => [?KEY_NOTIFICATION, <<"subtitle">>]
@@ -63,8 +64,31 @@
                            %% For `push_req` backwards-compatibility
                       ,<<"Call-ID">> => [?KEY_DATA, <<"Call-ID">>]
                       }).
-%% TODO: define mapping (https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages)
--define(PAYLOAD_MAP_V1, #{}).
+
+-define(PAYLOAD_MAP_V1, #{<<"Alert">> => #{<<"Title">> => [?KEY_NOTIFICATION, <<"title">>]
+                                          ,<<"Body">> => [?KEY_NOTIFICATION, <<"body">>]
+%                                         ,<<"Subtitle">> => [?KEY_NOTIFICATION, <<"subtitle">>]
+                                          ,<<"Title-Key">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"title_loc_key">>]
+                                          ,<<"Title-Params">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"title_loc_args">>]
+                                          ,<<"Body-Key">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"body_loc_key">>]
+                                          ,<<"Body-Params">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"body_loc_args">>]
+                                          }
+                        ,<<"Badge">> => fun set_notification_count/2
+                        ,<<"Category">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"click_action">>]
+                        ,<<"Collapse-ID">> => [?KEY_ANDROID, <<"collapse_key">>]
+%                       ,<<"Content-Available">> => <<"content_available">>
+%                       ,<<"Content-Mutable">> => <<"mutable_content">>
+                        ,<<"FCM">> => #{<<"Android">> => #{<<"Channel-ID">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"channel_id">>]
+                                                          ,<<"Color">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"color">>]
+                                                          ,<<"Icon">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"icon">>]
+                                                          ,<<"Tag">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"tag">>]
+                                                          }}
+                        ,<<"Priority">> => fun set_priority_v1/2
+                        ,<<"Sound">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"sound">>]
+                        ,<<"TTL">> => fun set_ttl_v1/2
+                           %% For `push_req` backwards-compatibility
+                        ,<<"Call-ID">> => [?KEY_DATA, <<"Call-ID">>]
+                        }).
 
 -type active_push_app() :: {push_app(), token_type()}.
 -type maybe_active_push_app() :: active_push_app() | 'undefined'.
@@ -276,6 +300,17 @@ set_badge(Badge, Payload) ->
                ).
 
 %%------------------------------------------------------------------------------
+%% @doc Set the home screen badge value.
+%% @end
+%%------------------------------------------------------------------------------
+-spec set_notification_count(integer(), map()) -> map().
+set_notification_count(NotificationCount, Payload) ->
+    kz_maps:put([?KEY_ANDROID, ?KEY_NOTIFICATION, <<"notification_count">>]
+               ,Payload
+               ,kz_term:to_binary(NotificationCount)
+               ).
+
+%%------------------------------------------------------------------------------
 %% @doc Set the message delivery priority.
 %% @end
 %%------------------------------------------------------------------------------
@@ -288,6 +323,19 @@ set_priority(PriorityBin, Payload) ->
 adjusted_priority(<<"low">>) -> <<"normal">>;
 adjusted_priority(Priority) -> Priority.
 
+-spec set_priority_v1(kz_term:ne_binary(), map()) -> map().
+set_priority_v1(PriorityBin, Payload) ->        %% [?KEY_ANDROID, <<"time_to_live">>]
+    Priority = adjusted_priority(PriorityBin),
+    Payload#{[?KEY_ANDROID, <<"priority">>] => Priority}.
+
+%%------------------------------------------------------------------------------
+%% @doc Set time to live value.
+%% @end
+%%------------------------------------------------------------------------------
+    -spec set_ttl_v1(non_neg_integer(), map()) -> map().
+set_ttl_v1(TTL, Payload) ->
+    TTLBin = <<(kz_term:to_binary(TTL))/binary, "s">>,
+    kz_maps:put([?KEY_ANDROID, <<"ttl">>], Payload, TTLBin).
 %%------------------------------------------------------------------------------
 %% @doc Convert an FCM response into a `pusher_result'. See
 %% [https://firebase.google.com/docs/cloud-messaging/http-server-ref#interpret-downstream]
