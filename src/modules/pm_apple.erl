@@ -180,7 +180,7 @@ maybe_send_push_notification({Pid, ExtraHeaders}, Token, TokenApp, JObj) ->
     MsgId = kz_api:msg_id(JObj2),
 
     Headers = build_headers(FlatProps, JObj2, MsgId, ExtraHeaders),
-    Msg = build_payload(FlatProps, JObj2, CustomData),
+    Msg = build_payload(FlatProps, JObj2, kz_json:to_map(CustomData)),
 
     lager:debug_unsafe("pushing for token ~s (headers: ~s): ~s"
                       ,[Token

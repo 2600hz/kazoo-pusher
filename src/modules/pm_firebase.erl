@@ -186,7 +186,7 @@ maybe_send_push_notification({{Pid, Envelope}, ActiveTokenType}, TokenID, JObj) 
     lager:debug("pushing to ~p: ~s: ~p", [Pid, TokenID, Message]),
 
     Result = fcm:push(Pid, TokenID, Message, ?RETRIES),
-    to_pusher_result(Result).
+    to_pusher_result(ActiveTokenType, Result).
 
 %%------------------------------------------------------------------------------
 %% @doc Build the FCM message payload.
@@ -195,18 +195,28 @@ maybe_send_push_notification({{Pid, Envelope}, ActiveTokenType}, TokenID, JObj) 
 -spec build_message(kz_json:object(), map(), map(), token_type()) -> map().
 build_message(JObj, CustomData, Envelope, ActiveTokenType) ->
     FlatProps = kz_json:to_proplist(kz_json:flatten(JObj)),
+    FlatData = kz_json:map(fun encode_objects/2, CustomData),
     Map = case ActiveTokenType of
               ?TOKEN_TYPE_FIREBASE -> ?PAYLOAD_MAP;
               ?TOKEN_TYPE_FIREBASE_V1 -> ?PAYLOAD_MAP_V1
           end,
     Message = pusher_module_util:build_payload(
-                %% TODO: flatten `data' for V1 - need to compare to legacy
-                %% output. Supposedly legacy didn't support nested data either,
-                %% but it accepted it. Match what was received on device for
-                %% legacy API payloads.
-                FlatProps, JObj, Map, #{?KEY_DATA => CustomData}
+                FlatProps, JObj, Map, #{?KEY_DATA => kz_json:to_map(FlatData)}
                ),
     kz_maps:merge(Message, Envelope).
+
+%%------------------------------------------------------------------------------
+%% @doc Encode objects within a `data' object, because FCM v1 does not accept
+%% nested data. FCM legacy automatically JSON-encoded nested data, so this does
+%% not affect the message received downstream.
+%% @end
+%%------------------------------------------------------------------------------
+-spec encode_objects(kz_json:key(), kz_json:json_term()) -> {kz_json:key(), kz_json:json_term()}.
+encode_objects(K, V) ->
+    case kz_json:is_json_object(V) of
+        'true' -> {K, kz_json:encode(V)};
+        'false' -> {K, V}
+    end.
 
 -spec get_fcm(push_app_id(), token_type(), ets:tid()) -> maybe_active_push_app().
 get_fcm(App, TokenType, ETS) ->
@@ -222,7 +232,7 @@ maybe_load_fcm(App, TokenType, ETS) ->
         {'ok', Active} ->
             %% Map the requested app/token type to the FCM PID and which token
             %% type is actually to be used
-            ets:insert(ETS, {{App, TokenType}, Active}),
+        ets:insert(ETS, {{App, TokenType}, Active}),
             Active;
         {'error', 'not_found'} ->
             'undefined';
@@ -319,14 +329,18 @@ set_priority(PriorityBin, Payload) ->
     Priority = adjusted_priority(PriorityBin),
     Payload#{<<"priority">> => Priority}.
 
+%%------------------------------------------------------------------------------
+%% @doc Set the message delivery priority for an FCM v1 message.
+%% @end
+%%------------------------------------------------------------------------------
+-spec set_priority_v1(kz_term:ne_binary(), map()) -> map().
+set_priority_v1(PriorityBin, Payload) ->
+    Priority = adjusted_priority(PriorityBin),
+    kz_maps:put([?KEY_ANDROID, <<"priority">>], Payload, Priority).
+
 -spec adjusted_priority(kz_term:ne_binary()) -> kz_term:ne_binary().
 adjusted_priority(<<"low">>) -> <<"normal">>;
 adjusted_priority(Priority) -> Priority.
-
--spec set_priority_v1(kz_term:ne_binary(), map()) -> map().
-set_priority_v1(PriorityBin, Payload) ->        %% [?KEY_ANDROID, <<"time_to_live">>]
-    Priority = adjusted_priority(PriorityBin),
-    Payload#{[?KEY_ANDROID, <<"priority">>] => Priority}.
 
 %%------------------------------------------------------------------------------
 %% @doc Set time to live value.
@@ -336,6 +350,7 @@ set_priority_v1(PriorityBin, Payload) ->        %% [?KEY_ANDROID, <<"time_to_liv
 set_ttl_v1(TTL, Payload) ->
     TTLBin = <<(kz_term:to_binary(TTL))/binary, "s">>,
     kz_maps:put([?KEY_ANDROID, <<"ttl">>], Payload, TTLBin).
+
 %%------------------------------------------------------------------------------
 %% @doc Convert an FCM response into a `pusher_result'. See
 %% [https://firebase.google.com/docs/cloud-messaging/http-server-ref#interpret-downstream]
@@ -345,18 +360,24 @@ set_ttl_v1(TTL, Payload) ->
 %% registration ID at a time.
 %% @end
 %%------------------------------------------------------------------------------
--spec to_pusher_result(fcm_response()) -> pusher_result:t().
-to_pusher_result([{_RegId, {'ok', _MsgId}}]) ->
+-spec to_pusher_result(token_type(), fcm_response()) -> pusher_result:t().
+to_pusher_result(?TOKEN_TYPE_FIREBASE, Response) ->
+    to_pusher_result(Response);
+to_pusher_result(?TOKEN_TYPE_FIREBASE_V1, Response) ->
+    v1_resp_to_pusher_result(Response).
+
+v1_resp_to_pusher_result([{_RegId, _MsgId}]) when is_binary(_MsgId) ->
     pusher_result:success();
-to_pusher_result([{_RegId, {'error', {StatusCode, Result}}}]) ->
+v1_resp_to_pusher_result([{_RegId, {'error', {StatusCode, Result}}}]) ->
     ResultJObj = kz_json:decode(Result),
     Error = kz_json:get_json_value(<<"error">>, ResultJObj, kz_json:new()),
     pusher_result:new(StatusCode
                      ,kz_json:get_ne_binary_value(<<"status">>, Error)
                      ,kz_json:get_ne_binary_value(<<"message">>, Error)
                      );
-to_pusher_result([{_RegId, {'error', Reason}}]) ->
-    pusher_result:internal_server_error(kz_term:to_binary(Reason));
+v1_resp_to_pusher_result([{_RegId, {'error', Reason}}]) ->
+    pusher_result:internal_server_error(kz_term:to_binary(Reason)).
+
 to_pusher_result([{_RegId, Result}]) when Result =:= 'ok'; tuple_size(Result) =:= 2 ->
     pusher_result:success();
 to_pusher_result([{_RegId, Error}]) ->

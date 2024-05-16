@@ -38,11 +38,11 @@
 %% separately.
 %% @end
 %%------------------------------------------------------------------------------
--spec extract_custom_data(kz_json:object()) -> {map(), kz_json:object()}.
+-spec extract_custom_data(kz_json:object()) -> {kz_json:object(), kz_json:object()}.
 extract_custom_data(JObj) ->
     case kz_json:take_value(<<"Data">>, JObj) of
         'false' -> {#{}, JObj};
-        {'value', Data, JObj1} -> {kz_json:to_map(Data), JObj1}
+        {'value', Data, JObj1} -> {Data, JObj1}
     end.
 
 %%------------------------------------------------------------------------------
