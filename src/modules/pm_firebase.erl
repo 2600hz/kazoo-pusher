@@ -35,10 +35,18 @@
 %% Number of times to retry push. Matches value from older version of
 %% `fcm-erlang'. Only used for the legacy API.
 -define(RETRIES, 3).
+-define(MP_SET(Key), Key => multiplatform_set(Key)).
 
 -define(KEY_DATA, <<"data">>).
 -define(KEY_NOTIFICATION, <<"notification">>).
 -define(KEY_ANDROID, <<"android">>).
+-define(KEY_APNS, <<"apns">>).
+
+-define(KEY_APS, <<"aps">>).
+-define(KEY_ALERT, <<"alert">>).
+
+-define(KEYS_APS_HD(Header), [?KEY_APNS, <<"headers">>, Header]).
+-define(KEYS_APS_PL, [?KEY_APNS, <<"payload">>, ?KEY_APS]).
 
 -define(PAYLOAD_MAP, #{<<"Alert">> => #{<<"Title">> => [?KEY_NOTIFICATION, <<"title">>]
                                        ,<<"Subtitle">> => [?KEY_NOTIFICATION, <<"subtitle">>]
@@ -67,25 +75,32 @@
 
 -define(PAYLOAD_MAP_V1, #{<<"Alert">> => #{<<"Title">> => [?KEY_NOTIFICATION, <<"title">>]
                                           ,<<"Body">> => [?KEY_NOTIFICATION, <<"body">>]
-%                                         ,<<"Subtitle">> => [?KEY_NOTIFICATION, <<"subtitle">>]
-                                          ,<<"Title-Key">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"title_loc_key">>]
-                                          ,<<"Title-Params">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"title_loc_args">>]
-                                          ,<<"Body-Key">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"body_loc_key">>]
-                                          ,<<"Body-Params">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"body_loc_args">>]
+                                          ,<<"Subtitle">> => ?KEYS_APS_PL ++ [?KEY_ALERT, <<"subtitle">>]
+                                          ,?MP_SET(<<"Title-Key">>)
+                                          ,?MP_SET(<<"Title-Params">>)
+                                          ,?MP_SET(<<"Body-Key">>)
+                                          ,?MP_SET(<<"Body-Params">>)
                                           }
+                        ,<<"APNs">> => #{<<"Alert">> => #{<<"Subtitle-Key">> => ?KEYS_APS_PL ++ [?KEY_ALERT, <<"subtitle-loc-key">>]
+                                                         ,<<"Subtitle-Params">> => ?KEYS_APS_PL ++ [?KEY_ALERT, <<"subtitle-loc-args">>]
+                                                         }
+                                        ,<<"Push-Type">> => ?KEYS_APS_HD(<<"apns-push-type">>)
+                                        ,<<"Thread-ID">> => ?KEYS_APS_PL ++ [<<"thread-id">>]
+                                        ,<<"Topic">> => ?KEYS_APS_HD(<<"apns-topic">>)
+                                        }
                         ,<<"Badge">> => fun set_notification_count/2
-                        ,<<"Category">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"click_action">>]
-                        ,<<"Collapse-ID">> => [?KEY_ANDROID, <<"collapse_key">>]
-%                       ,<<"Content-Available">> => <<"content_available">>
-%                       ,<<"Content-Mutable">> => <<"mutable_content">>
+                        ,?MP_SET(<<"Category">>)
+                        ,?MP_SET(<<"Collapse-ID">>)
+                        ,<<"Content-Available">> => fun set_content_available/2
+                        ,<<"Content-Mutable">> => fun set_mutable_content/2
                         ,<<"FCM">> => #{<<"Android">> => #{<<"Channel-ID">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"channel_id">>]
                                                           ,<<"Color">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"color">>]
                                                           ,<<"Icon">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"icon">>]
                                                           ,<<"Tag">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"tag">>]
                                                           }}
                         ,<<"Priority">> => fun set_priority_v1/2
-                        ,<<"Sound">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"sound">>]
-                        ,<<"TTL">> => fun set_ttl_v1/2
+                        ,?MP_SET(<<"Sound">>)
+                        ,<<"TTL">> => fun set_ttl_v1/3
                            %% For `push_req` backwards-compatibility
                         ,<<"Call-ID">> => [?KEY_DATA, <<"Call-ID">>]
                         }).
@@ -299,6 +314,48 @@ pool_name(App, Version) ->
     kz_term:to_atom(<<"fcm_", (kz_term:to_binary(Version))/binary, "_", App/binary>>, 'true').
 
 %%------------------------------------------------------------------------------
+%% @doc Produce a setter for a key that sets a multiplatform value.
+%% @end
+%%------------------------------------------------------------------------------
+-spec multiplatform_set(kz_term:ne_binary()) -> pusher_module_util:setter(any()).
+multiplatform_set(Key) ->
+    fun(V, Payload) ->
+        Payload1 = kz_maps:put(multiplatform_set_key('android', Key), Payload, V),
+        kz_maps:put(multiplatform_set_key('apns', Key), Payload1, V)
+    end.
+
+-spec multiplatform_set_key('android' | 'apns', kz_term:ne_binary()) -> kz_term:ne_binaries().
+multiplatform_set_key('android', <<"Title-Key">>) ->
+    [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"title_loc_key">>];
+multiplatform_set_key('android', <<"Title-Params">>) ->
+    [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"title_loc_args">>];
+multiplatform_set_key('android', <<"Body-Key">>) ->
+    [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"body_loc_key">>];
+multiplatform_set_key('android', <<"Body-Params">>) ->
+    [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"body_loc_args">>];
+multiplatform_set_key('android', <<"Category">>) ->
+    [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"click_action">>];
+multiplatform_set_key('android', <<"Collapse-ID">>) ->
+    [?KEY_ANDROID, <<"collapse_key">>];
+multiplatform_set_key('android', <<"Sound">>) ->
+    [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"sound">>];
+
+multiplatform_set_key('apns', <<"Title-Key">>) ->
+    ?KEYS_APS_PL ++ [?KEY_ALERT, <<"title-loc-key">>];
+multiplatform_set_key('apns', <<"Title-Params">>) ->
+    ?KEYS_APS_PL ++ [?KEY_ALERT, <<"title-loc-args">>];
+multiplatform_set_key('apns', <<"Body-Key">>) ->
+    ?KEYS_APS_PL ++ [?KEY_ALERT, <<"loc-key">>];
+multiplatform_set_key('apns', <<"Body-Params">>) ->
+    ?KEYS_APS_PL ++ [?KEY_ALERT, <<"loc-args">>];
+multiplatform_set_key('apns', <<"Category">>) ->
+    ?KEYS_APS_PL ++ [<<"category">>];
+multiplatform_set_key('apns', <<"Collapse-ID">>) ->
+    ?KEYS_APS_HD(<<"apns-collapse-id">>);
+multiplatform_set_key('apns', <<"Sound">>) ->
+    ?KEYS_APS_PL ++ [<<"sound">>].
+
+%%------------------------------------------------------------------------------
 %% @doc Set the home screen badge value.
 %% @end
 %%------------------------------------------------------------------------------
@@ -315,9 +372,34 @@ set_badge(Badge, Payload) ->
 %%------------------------------------------------------------------------------
 -spec set_notification_count(integer(), map()) -> map().
 set_notification_count(NotificationCount, Payload) ->
-    kz_maps:put([?KEY_ANDROID, ?KEY_NOTIFICATION, <<"notification_count">>]
+    Payload1 = kz_maps:put([?KEY_ANDROID, ?KEY_NOTIFICATION, <<"notification_count">>]
+                          ,Payload
+                          ,kz_term:to_binary(NotificationCount)
+                          ),
+    kz_maps:put(?KEYS_APS_PL ++ [<<"badge">>], Payload1, NotificationCount).
+
+%%------------------------------------------------------------------------------
+%% @doc Set whether the notification should be delivered as a silent background
+%% update on Apple platforms.
+%% @end
+%%------------------------------------------------------------------------------
+-spec set_content_available(boolean(), map()) -> map().
+set_content_available(ContentAvailable, Payload) ->
+    kz_maps:put(?KEYS_APS_PL ++ [<<"content-available">>]
                ,Payload
-               ,kz_term:to_binary(NotificationCount)
+               ,pm_apple:content_available(ContentAvailable)
+               ).
+
+%%------------------------------------------------------------------------------
+%% @doc Set whether notification service app extensions on Apple platforms
+%% should be able to modify the notification's content before delivery.
+%% @end
+%%------------------------------------------------------------------------------
+-spec set_mutable_content(boolean(), map()) -> map().
+set_mutable_content(MutableContent, Payload) ->
+    kz_maps:put(?KEYS_APS_PL ++ [<<"mutable-content">>]
+               ,Payload
+               ,pm_apple:mutable_content(MutableContent)
                ).
 
 %%------------------------------------------------------------------------------
@@ -335,8 +417,8 @@ set_priority(PriorityBin, Payload) ->
 %%------------------------------------------------------------------------------
 -spec set_priority_v1(kz_term:ne_binary(), map()) -> map().
 set_priority_v1(PriorityBin, Payload) ->
-    Priority = adjusted_priority(PriorityBin),
-    kz_maps:put([?KEY_ANDROID, <<"priority">>], Payload, Priority).
+    Payload1 = kz_maps:put([?KEY_ANDROID, <<"priority">>], Payload, adjusted_priority(PriorityBin)),
+    kz_maps:put(?KEYS_APS_HD(<<"apns-priority">>), Payload1, pm_apple:apns_priority(PriorityBin)).
 
 -spec adjusted_priority(kz_term:ne_binary()) -> kz_term:ne_binary().
 adjusted_priority(<<"low">>) -> <<"normal">>;
@@ -346,10 +428,12 @@ adjusted_priority(Priority) -> Priority.
 %% @doc Set time to live value.
 %% @end
 %%------------------------------------------------------------------------------
-    -spec set_ttl_v1(non_neg_integer(), map()) -> map().
-set_ttl_v1(TTL, Payload) ->
+    -spec set_ttl_v1(non_neg_integer(), kz_json:object(), map()) -> map().
+set_ttl_v1(TTL, JObj, Payload) ->
     TTLBin = <<(kz_term:to_binary(TTL))/binary, "s">>,
-    kz_maps:put([?KEY_ANDROID, <<"ttl">>], Payload, TTLBin).
+    Payload1 = kz_maps:put([?KEY_ANDROID, <<"ttl">>], Payload, TTLBin),
+    ApnsExpiration = pm_apple:apns_expiration(TTL, JObj),
+    kz_maps:put(?KEYS_APS_HD(<<"apns-expiration">>), Payload1, ApnsExpiration).
 
 %%------------------------------------------------------------------------------
 %% @doc Convert an FCM response into a `pusher_result'. See
