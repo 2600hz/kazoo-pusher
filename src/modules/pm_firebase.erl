@@ -139,7 +139,7 @@ start_link() ->
 enabled(App) ->
     L = kapps_config:get_boolean(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE, <<"enabled">>], 'true', App),
     V1 = kapps_config:get_boolean(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE_V1, <<"enabled">>], 'true', App),
-    L orelse V1.
+    L or V1.
 
 %%------------------------------------------------------------------------------
 %% @doc Send a push notification using this service.
