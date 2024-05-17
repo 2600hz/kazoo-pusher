@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2013-2023, 2600Hz
+%%% @copyright (C) 2013-2024, 2600Hz
 %%% @doc
 %%% @author Luis Azedo
 %%%
@@ -66,8 +66,7 @@
 -type endpoint_id() :: kz_term:ne_binary().
 -type endpoint_type() :: 'device' | 'user'.
 %% A tuple containing a token, token app, and token type.
--type push_props() :: {kz_term:api_ne_binary(), kz_term:api_ne_binary(), token_type()}.
--type token_type() :: kz_term:api_ne_binary().
+-type push_props() :: {kz_term:api_ne_binary(), kz_term:api_ne_binary(), token_type() | 'undefined'}.
 
 -type device_fetch_error() :: {endpoint_id()
                               ,kz_datamgr:data_errors() | 'invalid_parameters'
@@ -111,6 +110,7 @@ pm_module(<<"google">>) -> pm_module(?TOKEN_TYPE_FIREBASE);
 pm_module(<<"android">>) -> pm_module(?TOKEN_TYPE_FIREBASE);
 pm_module(?TOKEN_TYPE_APPLE) -> 'pm_apple';
 pm_module(?TOKEN_TYPE_FIREBASE) -> 'pm_firebase';
+pm_module(?TOKEN_TYPE_FIREBASE_V1) -> 'pm_firebase';
 pm_module(_) -> 'undefined'.
 
 -spec add_timestamp_to_req(kz_json:object()) -> kz_json:object().
@@ -382,20 +382,20 @@ maybe_push_to_target(_, {Token, TokenApp, TokenType}) when Token =:= 'undefined'
     lager:error("missing mandatory push properties"),
     pusher_result:bad_request(<<"Missing mandatory push properties">>);
 maybe_push_to_target(JObj, {Token, TokenApp, TokenType}) ->
-    AppEnabled = app_enabled(TokenApp, TokenType),
     Module = pm_module(TokenType),
+    AppEnabled = app_enabled(TokenApp, Module),
     lager:info("received push ~s / ~s / ~s", [TokenType, TokenApp, Token]),
 
-    case whereis(Module) of
+    case Module of
         'undefined' ->
             lager:error("pm module not available for token type ~s", [TokenType]),
             pusher_result:bad_request(<<"Token type unknown">>);
         _ when not AppEnabled ->
-            lager:debug("app ~s is disabled", [TokenApp]),
+            lager:debug("app ~s is disabled for token type ~s", [TokenApp, TokenType]),
             pusher_result:success(<<"App disabled">>);
-        Pid ->
+        _ ->
             lager:debug("pushing for token ~s(~s) to module ~s", [Token, TokenType, Module]),
-            gen_server:call(Pid, {'push', Token, TokenApp, JObj})
+            Module:push(Token, TokenApp, TokenType, JObj)
     end.
 
 %%------------------------------------------------------------------------------
@@ -470,14 +470,15 @@ common_delete_keys() ->
     [<<"Alert">>, <<"Alert-Key">>, <<"Alert-Params">>, <<"Badge">>, <<"Payload">>].
 
 %%------------------------------------------------------------------------------
-%% @doc Returns true if the specified app is enabled under the specified token
-%% type.
+%% @doc Returns true if the app is enabled for the specified push service
+%% module.
 %% @end
 %%------------------------------------------------------------------------------
--spec app_enabled(kz_term:ne_binary(), kz_term:ne_binary()) -> boolean().
-app_enabled(App, TokenType) ->
-    lager:info("checking if ~p / ~p is enabled", [App, TokenType]),
-    kapps_config:get_boolean(?CONFIG_CAT, [TokenType, <<"enabled">>], 'true', App).
+-spec app_enabled(push_app_id(), maybe_pm_module()) -> boolean().
+app_enabled(_, 'undefined') -> 'false';
+app_enabled(App, Module) ->
+    lager:info("checking if ~s / ~s is enabled", [App, Module]),
+    Module:enabled(App).
 
 -spec push(kz_json:object()) -> 'ok'.
 push(JObj) ->

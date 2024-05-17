@@ -1,20 +1,25 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2010-2023, 2600Hz
+%%% @copyright (C) 2010-2024, 2600Hz
 %%% @doc
 %%% This Source Code Form is subject to the terms of the Mozilla Public
 %%% License, v. 2.0. If a copy of the MPL was not distributed with this
 %%% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%%
+%%% @author Daniel Finke <danielfinke2011@gmail.com>
 %%% @end
 %%%-----------------------------------------------------------------------------
 -module(pm_apple).
 -behaviour(gen_server).
+-behaviour(pusher_module).
 
 -include("pusher.hrl").
 
 -define(SERVER, ?MODULE).
 
--export([start_link/0]).
+-export([start_link/0
+        ,enabled/1
+        ,push/4
+        ]).
 
 -export([init/1
         ,handle_call/3
@@ -22,6 +27,13 @@
         ,handle_info/2
         ,terminate/2
         ,code_change/3
+        ]).
+
+%% Value formatters used by `pm_firebase' for multiplatform
+-export([apns_priority/1
+        ,apns_expiration/2
+        ,content_available/1
+        ,mutable_content/1
         ]).
 
 -record(state, {tab :: ets:tid()}).
@@ -67,9 +79,27 @@
                        ,K := header_v()
                        }.
 
+-type maybe_push_app() :: push_app() | 'undefined'.
+
 -spec start_link() -> kz_types:startlink_ret().
 start_link() ->
     gen_server:start_link({'local', ?SERVER}, ?MODULE, [],[]).
+
+%%------------------------------------------------------------------------------
+%% @doc Returns true if this service is enabled for the specified app.
+%% @end
+%%------------------------------------------------------------------------------
+-spec enabled(push_app_id()) -> boolean().
+enabled(App) ->
+    kapps_config:get_boolean(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"enabled">>], 'true', App).
+
+%%------------------------------------------------------------------------------
+%% @doc Send a push notification using this service.
+%% @end
+%%------------------------------------------------------------------------------
+-spec push(kz_term:ne_binary(), push_app_id(), token_type(), kz_json:object()) -> pusher_result:t().
+push(Token, TokenApp, _TokenType, JObj) ->
+    gen_server:call(?SERVER, {'push', Token, TokenApp, JObj}).
 
 -spec init([]) -> {'ok', state()}.
 init([]) ->
@@ -142,7 +172,7 @@ log_headers(Headers) ->
 %% @doc Send the push notification if a connection is established to APNs.
 %% @end
 %%------------------------------------------------------------------------------
--spec maybe_send_push_notification(push_app()
+-spec maybe_send_push_notification(maybe_push_app()
                                   ,kz_term:ne_binary()
                                   ,kz_term:ne_binary()
                                   ,kz_json:object()
@@ -157,7 +187,7 @@ maybe_send_push_notification({Pid, ExtraHeaders}, Token, TokenApp, JObj) ->
     MsgId = kz_api:msg_id(JObj2),
 
     Headers = build_headers(FlatProps, JObj2, MsgId, ExtraHeaders),
-    Msg = build_payload(FlatProps, JObj2, CustomData),
+    Msg = build_payload(FlatProps, JObj2, kz_json:to_map(CustomData)),
 
     lager:debug_unsafe("pushing for token ~s (headers: ~s): ~s"
                       ,[Token
@@ -216,14 +246,14 @@ reload_apns(App, ETS) ->
         _Push -> 'ok'
     end.
 
--spec get_apns(kz_term:ne_binary(), ets:tid()) -> push_app().
+-spec get_apns(kz_term:ne_binary(), ets:tid()) -> maybe_push_app().
 get_apns(App, ETS) ->
     case ets:lookup(ETS, App) of
         [] -> maybe_load_apns(App, ETS);
         [{App, Push}] -> Push
     end.
 
--spec maybe_load_apns(kz_term:ne_binary(), ets:tid()) -> push_app().
+-spec maybe_load_apns(kz_term:ne_binary(), ets:tid()) -> maybe_push_app().
 maybe_load_apns(App, ETS) ->
     CertBin = kapps_config:get_ne_binary(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"certificate">>], 'undefined', App),
     Host = kapps_config:get_ne_binary(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"host">>], ?DEFAULT_APNS_HOST, App),
@@ -236,7 +266,7 @@ maybe_load_apns(App, ETS) ->
                      ,kz_term:api_ne_binary()
                      ,kz_term:ne_binary()
                      ,map()
-                     ) -> push_app().
+                     ) -> maybe_push_app().
 maybe_load_apns(App, _, 'undefined', _, _) ->
     lager:debug("apple pusher certificate for app ~s not found", [App]),
     'undefined';
@@ -305,13 +335,16 @@ default_apns_topic(TokenApp) ->
 %%------------------------------------------------------------------------------
 -spec set_apns_priority(kz_term:ne_binary(), headers()) -> headers_m('apns_priority').
 set_apns_priority(PriorityBin, Headers) ->
-    Priority = apns_priority(PriorityBin),
-    Headers#{apns_priority => kz_term:to_binary(Priority)}.
+    Headers#{apns_priority => apns_priority(PriorityBin)}.
 
--spec apns_priority(kz_term:ne_binary()) -> 1 | 5 | 10.
-apns_priority(<<"low">>) -> 1;
-apns_priority(<<"normal">>) -> 5;
-apns_priority(<<"high">>) -> 10.
+-spec apns_priority(kz_term:ne_binary()) -> kz_term:ne_binary().
+apns_priority(PriorityBin) ->
+    kz_term:to_binary(apns_priority_int(PriorityBin)).
+
+-spec apns_priority_int(kz_term:ne_binary()) -> 1 | 5 | 10.
+apns_priority_int(<<"low">>) -> 1;
+apns_priority_int(<<"normal">>) -> 5;
+apns_priority_int(<<"high">>) -> 10.
 
 %%------------------------------------------------------------------------------
 %% @doc Set the `apns-expiration' header. A value of `0' tells APNs to only try
@@ -319,15 +352,17 @@ apns_priority(<<"high">>) -> 10.
 %% @end
 %%------------------------------------------------------------------------------
 -spec set_apns_expiration(integer(), kz_json:object(), headers()) -> headers_m('apns_expiration').
-set_apns_expiration(0, _, Headers) -> set_apns_expiration(0, Headers);
 set_apns_expiration(TTL, JObj, Headers) ->
-    TimestampMs = pusher_util:timestamp_ms(JObj),
-    Expiration = TimestampMs div 1000 + TTL,
-    set_apns_expiration(Expiration, Headers).
+    Headers#{apns_expiration => apns_expiration(TTL, JObj)}.
 
--spec set_apns_expiration(integer(), headers()) -> headers_m('apns_expiration').
-set_apns_expiration(Expiration, Headers) ->
-    Headers#{apns_expiration => kz_term:to_binary(Expiration)}.
+-spec apns_expiration(integer(), kz_json:object()) -> kz_term:ne_binary().
+apns_expiration(TTL, JObj) ->
+    kz_term:to_binary(apns_expiration_int(TTL, JObj)).
+
+-spec apns_expiration_int(integer(), kz_json:object()) -> integer().
+apns_expiration_int(0, _) -> 0;
+apns_expiration_int(TTL, JObj) ->
+    pusher_util:timestamp_ms(JObj) div 1000 + TTL.
 
 %%------------------------------------------------------------------------------
 %% @doc Set whether the notification should be delivered as a silent background
@@ -338,8 +373,11 @@ set_apns_expiration(Expiration, Headers) ->
 set_content_available(ContentAvailable, Payload) ->
     kz_maps:put([?KEY_APS, <<"content-available">>]
                ,Payload
-               ,to_integer(ContentAvailable)
+               ,content_available(ContentAvailable)
                ).
+
+-spec content_available(boolean()) -> 0 | 1.
+content_available(ContentAvailable) -> to_integer(ContentAvailable).
 
 %%------------------------------------------------------------------------------
 %% @doc Set whether a notification service app extensions should be able to
@@ -350,8 +388,11 @@ set_content_available(ContentAvailable, Payload) ->
 set_mutable_content(MutableContent, Payload) ->
     kz_maps:put([?KEY_APS, <<"mutable-content">>]
                ,Payload
-               ,to_integer(MutableContent)
+               ,mutable_content(MutableContent)
                ).
+
+-spec mutable_content(boolean()) -> 0 | 1.
+mutable_content(MutableContent) -> to_integer(MutableContent).
 
 %%------------------------------------------------------------------------------
 %% @doc Convert an APNs response into a `pusher_result'.
