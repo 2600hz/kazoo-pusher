@@ -81,29 +81,29 @@
                                           ,?MP_SET(<<"Body-Key">>)
                                           ,?MP_SET(<<"Body-Params">>)
                                           }
-                        ,<<"APNs">> => #{<<"Alert">> => #{<<"Subtitle-Key">> => ?KEYS_APS_PL ++ [?KEY_ALERT, <<"subtitle-loc-key">>]
-                                                         ,<<"Subtitle-Params">> => ?KEYS_APS_PL ++ [?KEY_ALERT, <<"subtitle-loc-args">>]
-                                                         }
-                                        ,<<"Push-Type">> => ?KEYS_APS_HD(<<"apns-push-type">>)
-                                        ,<<"Thread-ID">> => ?KEYS_APS_PL ++ [<<"thread-id">>]
-                                        ,<<"Topic">> => ?KEYS_APS_HD(<<"apns-topic">>)
-                                        }
-                        ,<<"Badge">> => fun set_notification_count/2
-                        ,?MP_SET(<<"Category">>)
-                        ,?MP_SET(<<"Collapse-ID">>)
-                        ,<<"Content-Available">> => fun set_content_available/2
-                        ,<<"Content-Mutable">> => fun set_mutable_content/2
-                        ,<<"FCM">> => #{<<"Android">> => #{<<"Channel-ID">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"channel_id">>]
-                                                          ,<<"Color">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"color">>]
-                                                          ,<<"Icon">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"icon">>]
-                                                          ,<<"Tag">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"tag">>]
-                                                          }}
-                        ,<<"Priority">> => fun set_priority_v1/2
-                        ,?MP_SET(<<"Sound">>)
-                        ,<<"TTL">> => fun set_ttl_v1/3
-                           %% For `push_req` backwards-compatibility
-                        ,<<"Call-ID">> => [?KEY_DATA, <<"Call-ID">>]
-                        }).
+                         ,<<"APNs">> => #{<<"Alert">> => #{<<"Subtitle-Key">> => ?KEYS_APS_PL ++ [?KEY_ALERT, <<"subtitle-loc-key">>]
+                                                          ,<<"Subtitle-Params">> => ?KEYS_APS_PL ++ [?KEY_ALERT, <<"subtitle-loc-args">>]
+                                                          }
+                                         ,<<"Push-Type">> => ?KEYS_APS_HD(<<"apns-push-type">>)
+                                         ,<<"Thread-ID">> => ?KEYS_APS_PL ++ [<<"thread-id">>]
+                                         ,<<"Topic">> => ?KEYS_APS_HD(<<"apns-topic">>)
+                                         }
+                         ,<<"Badge">> => fun set_notification_count/2
+                         ,?MP_SET(<<"Category">>)
+                         ,?MP_SET(<<"Collapse-ID">>)
+                         ,<<"Content-Available">> => fun set_content_available/2
+                         ,<<"Content-Mutable">> => fun set_mutable_content/2
+                         ,<<"FCM">> => #{<<"Android">> => #{<<"Channel-ID">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"channel_id">>]
+                                                           ,<<"Color">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"color">>]
+                                                           ,<<"Icon">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"icon">>]
+                                                           ,<<"Tag">> => [?KEY_ANDROID, ?KEY_NOTIFICATION, <<"tag">>]
+                                                           }}
+                         ,<<"Priority">> => fun set_priority_v1/2
+                         ,?MP_SET(<<"Sound">>)
+                         ,<<"TTL">> => fun set_ttl_v1/3
+                          %% For `push_req` backwards-compatibility
+                         ,<<"Call-ID">> => [?KEY_DATA, <<"Call-ID">>]
+                         }).
 
 -type active_push_app() :: {push_app(), token_type()}.
 -type maybe_active_push_app() :: active_push_app() | 'undefined'.
@@ -247,7 +247,7 @@ maybe_load_fcm(App, TokenType, ETS) ->
         {'ok', Active} ->
             %% Map the requested app/token type to the FCM PID and which token
             %% type is actually to be used
-        ets:insert(ETS, {{App, TokenType}, Active}),
+            ets:insert(ETS, {{App, TokenType}, Active}),
             Active;
         {'error', 'not_found'} ->
             'undefined';
@@ -320,8 +320,8 @@ pool_name(App, Version) ->
 -spec multiplatform_set(kz_term:ne_binary()) -> pusher_module_util:setter(any()).
 multiplatform_set(Key) ->
     fun(V, Payload) ->
-        Payload1 = kz_maps:put(multiplatform_set_key('android', Key), Payload, V),
-        kz_maps:put(multiplatform_set_key('apns', Key), Payload1, V)
+            Payload1 = kz_maps:put(multiplatform_set_key('android', Key), Payload, V),
+            kz_maps:put(multiplatform_set_key('apns', Key), Payload1, V)
     end.
 
 -spec multiplatform_set_key('android' | 'apns', kz_term:ne_binary()) -> kz_term:ne_binaries().
@@ -428,7 +428,7 @@ adjusted_priority(Priority) -> Priority.
 %% @doc Set time to live value.
 %% @end
 %%------------------------------------------------------------------------------
-    -spec set_ttl_v1(non_neg_integer(), kz_json:object(), map()) -> map().
+-spec set_ttl_v1(non_neg_integer(), kz_json:object(), map()) -> map().
 set_ttl_v1(TTL, JObj, Payload) ->
     TTLBin = <<(kz_term:to_binary(TTL))/binary, "s">>,
     Payload1 = kz_maps:put([?KEY_ANDROID, <<"ttl">>], Payload, TTLBin),
