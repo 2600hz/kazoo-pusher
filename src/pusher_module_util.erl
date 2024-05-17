@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2023, 2600Hz
+%%% @copyright (C) 2024, 2600Hz
 %%% @doc Utilities for pusher modules.
 %%%
 %%% @end
@@ -27,6 +27,7 @@
 
 -export_type([get_key_map/1
              ,payload/1
+             ,setter/1
              ]).
 
 %%%=============================================================================
@@ -38,11 +39,11 @@
 %% separately.
 %% @end
 %%------------------------------------------------------------------------------
--spec extract_custom_data(kz_json:object()) -> {map(), kz_json:object()}.
+-spec extract_custom_data(kz_json:object()) -> {kz_json:object(), kz_json:object()}.
 extract_custom_data(JObj) ->
     case kz_json:take_value(<<"Data">>, JObj) of
         'false' -> {#{}, JObj};
-        {'value', Data, JObj1} -> {kz_json:to_map(Data), JObj1}
+        {'value', Data, JObj1} -> {Data, JObj1}
     end.
 
 %%------------------------------------------------------------------------------

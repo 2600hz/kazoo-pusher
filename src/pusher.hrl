@@ -16,11 +16,14 @@
 
 -define(TOKEN_TYPE_APPLE, <<"apple">>).
 -define(TOKEN_TYPE_FIREBASE, <<"firebase">>).
--define(TOKEN_TYPES, [?TOKEN_TYPE_APPLE, ?TOKEN_TYPE_FIREBASE]).
+-define(TOKEN_TYPE_FIREBASE_V1, <<"firebase_v1">>).
+-define(TOKEN_MOD_TYPES, [?TOKEN_TYPE_APPLE, ?TOKEN_TYPE_FIREBASE]).
 
 -define(KEY_TIMESTAMP_MS, <<"Timestamp-MS">>).
 
--type push_app() :: {kz_term:api_pid(), map()} | 'undefined'.
+-type push_app_id() :: kz_term:ne_binary().
+-type push_app() :: {kz_term:api_pid(), map()}.
+-type token_type() :: kz_term:ne_binary().
 
 -define(CATCH(Type, Reason, Stacktrace), Type:Reason:Stacktrace).
 -define(LOGSTACK(Stacktrace), kz_log:log_stacktrace(Stacktrace)).

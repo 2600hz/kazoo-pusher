@@ -59,6 +59,24 @@
                 }
             },
             "type": "object"
+        },
+        "firebase_v1": {
+            "properties": {
+                "enabled": {
+                    "default": true,
+                    "description": "Whether the app is enabled for push notifications",
+                    "type": "boolean"
+                },
+                "headers": {
+                    "default": {},
+                    "description": "pusher firebase_v1 headers",
+                    "type": "object"
+                },
+                "service_account": {
+                    "description": "The contents of the service account file for an account with adequate permissions for Firebase Cloud Messaging.",
+                    "type": "object"
+                }
+            }
         }
     },
     "type": "object"
