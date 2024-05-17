@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2010-2020, 2600Hz
+%%% @copyright (C) 2010-2024, 2600Hz
 %%% @doc
 %%% This Source Code Form is subject to the terms of the Mozilla Public
 %%% License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -33,6 +33,8 @@
                   ,{<<"Call-ID">>, [<<"aps">>, <<"call-id">>]}
                   ,{<<"Payload">>, fun kz_json:merge/2}
                   ]).
+
+-type maybe_push_app() :: push_app() | 'undefined'.
 
 -spec start_link() -> kz_types:startlink_ret().
 start_link() ->
@@ -92,7 +94,7 @@ code_change(_OldVsn, State, _Extra) ->
 log_headers(Headers) ->
     kz_binary:join([list_to_binary([kz_term:to_binary(K), "=", kz_term:to_binary(V)]) || {K, V} <- maps:to_list(Headers)],<<",">>).
 
--spec maybe_send_push_notification(push_app(), kz_json:object()) -> any().
+-spec maybe_send_push_notification(maybe_push_app(), kz_json:object()) -> any().
 maybe_send_push_notification('undefined', _) -> 'ok';
 maybe_send_push_notification({Pid, ExtraHeaders}, JObj) ->
     TokenID = kz_json:get_value(<<"Token-ID">>, JObj),
@@ -129,7 +131,7 @@ reload_apns(App, ETS) ->
         _Push -> ok
     end.
 
--spec get_apns(kz_term:api_binary(), ets:tid()) -> push_app().
+-spec get_apns(kz_term:api_binary(), ets:tid()) -> maybe_push_app().
 get_apns('undefined', _) -> 'undefined';
 get_apns(App, ETS) ->
     case ets:lookup(ETS, App) of
@@ -137,7 +139,7 @@ get_apns(App, ETS) ->
         [{App, Push}] -> Push
     end.
 
--spec maybe_load_apns(kz_term:api_binary(), ets:tid()) -> push_app().
+-spec maybe_load_apns(kz_term:api_binary(), ets:tid()) -> maybe_push_app().
 maybe_load_apns(App, ETS) ->
     CertBin = kapps_config:get_ne_binary(?CONFIG_CAT, [<<"apple">>, <<"certificate">>], 'undefined', App),
     Host = kapps_config:get_ne_binary(?CONFIG_CAT, [<<"apple">>, <<"host">>], ?DEFAULT_APNS_HOST, App),
@@ -150,7 +152,7 @@ maybe_load_apns(App, ETS) ->
                      ,kz_term:api_ne_binary()
                      ,kz_term:ne_binary()
                      ,map()
-                     ) -> push_app().
+                     ) -> maybe_push_app().
 maybe_load_apns(App, _, 'undefined', _, _) ->
     lager:debug("apple pusher certificate for app ~s not found", [App]),
     'undefined';

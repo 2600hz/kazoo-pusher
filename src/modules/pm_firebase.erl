@@ -1,10 +1,11 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2010-2021, 2600Hz
+%%% @copyright (C) 2010-2024, 2600Hz
 %%% @doc
 %%% This Source Code Form is subject to the terms of the Mozilla Public
 %%% License, v. 2.0. If a copy of the MPL was not distributed with this
 %%% file, You can obtain one at https://mozilla.org/MPL/2.0/.
 %%%
+%%% @author Daniel Finke <danielfinke2011@gmail.com>
 %%% @end
 %%%-----------------------------------------------------------------------------
 -module(pm_firebase).
@@ -27,12 +28,18 @@
 -record(state, {tab :: ets:tid()}).
 -type state() :: #state{}.
 
+%% Number of times to retry push. Matches value from older version of
+%% `fcm-erlang'. Only used for the legacy API.
+-define(RETRIES, 3).
+
 -define(FIREBASE_MAP, [{<<"Alert-Key">>, [<<"alert">>, <<"loc-key">>]}
                       ,{<<"Alert-Params">>, [<<"alert">>, <<"loc-args">>]}
                       ,{<<"Sound">>, [<<"sound">>]}
                       ,{<<"Call-ID">>, [<<"Call-ID">>]}
                       ,{<<"Payload">>, fun kz_json:merge/2}
                       ]).
+
+-type maybe_push_app() :: push_app() | 'undefined'.
 
 -spec start_link() -> kz_types:startlink_ret().
 start_link() ->
@@ -70,7 +77,7 @@ terminate(_Reason, #state{tab=ETS}) ->
 code_change(_OldVsn, State, _Extra) ->
     {'ok', State}.
 
--spec maybe_send_push_notification(push_app(), kz_json:object()) -> 'ok'.
+-spec maybe_send_push_notification(maybe_push_app(), kz_json:object()) -> 'ok'.
 maybe_send_push_notification('undefined', _JObj) -> lager:debug("no pid to send push");
 maybe_send_push_notification({Pid, Envelope}, JObj) ->
     TokenID = kz_json:get_value(<<"Token-ID">>, JObj),
@@ -79,11 +86,26 @@ maybe_send_push_notification({Pid, Envelope}, JObj) ->
 
     lager:debug("pushing to ~p: ~s: ~p", [Pid, TokenID, Message]),
 
-    fcm:push(Pid, [TokenID], Message).
+    _Result = fcm:push(Pid, TokenID, Message, ?RETRIES),
+    'ok'.
 
 -spec build_payload(kz_json:object()) -> kz_json:object().
 build_payload(JObj) ->
-    kz_json:foldl(fun map_key/3, kz_json:new(), JObj).
+    CustomData = kz_json:foldl(fun map_key/3, kz_json:new(), JObj),
+    kz_json:map(fun encode_objects/2, CustomData).
+
+%%------------------------------------------------------------------------------
+%% @doc Encode objects within a `data' object, because FCM v1 does not accept
+%% nested data. FCM legacy automatically JSON-encoded nested data, so this does
+%% not affect the message received downstream.
+%% @end
+%%------------------------------------------------------------------------------
+-spec encode_objects(kz_json:key(), kz_json:json_term()) -> {kz_json:key(), kz_json:json_term()}.
+encode_objects(K, V) ->
+    case kz_json:is_json_object(V) of
+        'true' -> {K, kz_json:encode(V)};
+        'false' -> {K, V}
+    end.
 
 -spec map_key(term(), term(), kz_json:object()) -> kz_json:object().
 map_key(K, V, JObj) ->
@@ -93,7 +115,7 @@ map_key(K, V, JObj) ->
         {_, K1} -> kz_json:set_value(K1, V, JObj)
     end.
 
--spec get_fcm(kz_term:api_binary(), ets:tid()) -> push_app().
+-spec get_fcm(kz_term:api_binary(), ets:tid()) -> maybe_push_app().
 get_fcm('undefined', _) -> 'undefined';
 get_fcm(App, ETS) ->
     case ets:lookup(ETS, App) of
@@ -101,27 +123,69 @@ get_fcm(App, ETS) ->
         [{App, Push}] -> Push
     end.
 
--spec maybe_load_fcm(kz_term:api_binary(), ets:tid()) -> push_app().
+-spec maybe_load_fcm(binary(), ets:tid()) -> maybe_push_app().
 maybe_load_fcm(App, ETS) ->
     lager:debug("loading fcm secret for ~s", [App]),
-    FCMSecret = kapps_config:get_binary(?CONFIG_CAT, [<<"firebase">>, <<"api_key">>], <<>>, App),
-    EnvelopeJObj = kapps_config:get_json(?CONFIG_CAT, [<<"firebase">>, <<"headers">>], kz_json:new(), App),
-    Envelope = kz_json:to_map(EnvelopeJObj),
-    maybe_load_fcm(App, ETS, FCMSecret, Envelope).
-
--spec maybe_load_fcm(kz_term:api_binary(), ets:tid(), binary(), map()) -> push_app().
-maybe_load_fcm(App, _ETS, <<>>, _Envelope) ->
-    lager:debug("firebase pusher api_key for app ~s not found", [App]),
-    'undefined';
-maybe_load_fcm(App, ETS, APIKey, Envelope) ->
-    case fcm:start(kz_term:to_atom(<<"fcm_", App/binary>>, 'true'), kz_term:to_list(APIKey)) of
-        {'ok', Pid} ->
-            ets:insert(ETS, {App, {Pid, Envelope}}),
-            {Pid, Envelope};
-        {'error', {'already_started', Pid}} ->
-            ets:insert(ETS, {App, {Pid, Envelope}}),
-            {Pid, Envelope};
+    case maybe_start_pool(App) of
+        {'ok', Active} ->
+            ets:insert(ETS, {App, Active}),
+            Active;
+        {'error', 'not_found'} ->
+            'undefined';
         {'error', Reason} ->
-            lager:error("error loading fcm ~p", [Reason]),
+            lager:error("error loading FCM: ~p", [Reason]),
             'undefined'
     end.
+
+-spec maybe_start_pool(binary()) -> kz_either:either(any(), push_app()).
+maybe_start_pool(App) ->
+    case maybe_start_v1_pool(App) of
+        {'ok', _}=Ret -> Ret;
+        {'error', 'not_found'} -> maybe_start_legacy_pool(App);
+        {'error', _E}=E -> E
+    end.
+
+-spec maybe_start_v1_pool(binary()) -> kz_either:either(any(), push_app()).
+maybe_start_v1_pool(App) ->
+    case kapps_config:get_json(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE_V1, <<"service_account">>], 'undefined', App) of
+        'undefined' ->
+            lager:debug("firebase pusher service_account for app ~s not found", [App]),
+            {'error', 'not_found'};
+        ServiceAccountData -> start_v1_pool(App, ServiceAccountData)
+    end.
+
+-spec maybe_start_legacy_pool(binary()) -> kz_either:either(any(), push_app()).
+maybe_start_legacy_pool(App) ->
+    case kapps_config:get_ne_binary(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE, <<"api_key">>], 'undefined', App) of
+        'undefined' ->
+            lager:debug("firebase pusher api_key for app ~s not found", [App]),
+            {'error', 'not_found'};
+        APIKey -> start_legacy_pool(App, APIKey)
+    end.
+
+-spec start_v1_pool(binary(), kz_json:object()) -> kz_either:either(any(), push_app()).
+start_v1_pool(App, ServiceAccountData) ->
+    Name = pool_name(App, 'v1'),
+    ServiceAccountBin = kz_json:encode(ServiceAccountData),
+    EnvelopeJObj = kapps_config:get_json(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE_V1, <<"headers">>], kz_json:new(), App),
+    Envelope = kz_json:to_map(EnvelopeJObj),
+    case fcm:start_pool_with_json_service_file_bin(Name, ServiceAccountBin) of
+        {'ok', Pid} -> {'ok', {Pid, Envelope}};
+        {'error', {'already_started', Pid}} -> {'ok', {Pid, Envelope}};
+        {'error', _}=E -> E
+    end.
+
+-spec start_legacy_pool(binary(), kz_term:ne_binary()) -> kz_either:either(any(), push_app()).
+start_legacy_pool(App, APIKey) ->
+    Name = pool_name(App, 'legacy'),
+    EnvelopeJObj = kapps_config:get_json(?CONFIG_CAT, [?TOKEN_TYPE_FIREBASE, <<"headers">>], kz_json:new(), App),
+    Envelope = kz_json:to_map(EnvelopeJObj),
+    case fcm:start_pool_with_api_key(Name, kz_term:to_list(APIKey)) of
+        {'ok', Pid} -> {'ok', {Pid, Envelope}};
+        {'error', {'already_started', Pid}} -> {'ok', {Pid, Envelope}};
+        {'error', _E}=E -> E
+    end.
+
+-spec pool_name(binary(), 'v1' | 'legacy') -> atom().
+pool_name(App, Version) ->
+    kz_term:to_atom(<<"fcm_", (kz_term:to_binary(Version))/binary, "_", App/binary>>, 'true').

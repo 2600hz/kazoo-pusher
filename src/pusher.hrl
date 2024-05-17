@@ -14,9 +14,13 @@
 -define(TOKEN_PROXY_KEY, <<"Proxy-Path">>).
 -define(TOKEN_PUBLIC_PROXY_KEY, <<"Proxy-URI">>).
 
+-define(TOKEN_TYPE_APPLE, <<"apple">>).
+-define(TOKEN_TYPE_FIREBASE, <<"firebase">>).
+-define(TOKEN_TYPE_FIREBASE_V1, <<"firebase_v1">>).
+
 -define(MODULES, ['pm_apple', 'pm_firebase']).
 
--type push_app() :: {kz_term:api_pid(), map()} | 'undefined'.
+-type push_app() :: {kz_term:api_pid(), map()}.
 
 -define(CATCH(Type, Reason, Stacktrace), Type:Reason:Stacktrace).
 -define(LOGSTACK(Stacktrace), kz_log:log_stacktrace(Stacktrace)).
