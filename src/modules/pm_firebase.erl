@@ -207,7 +207,7 @@ maybe_send_push_notification({{Pid, Envelope}, ActiveTokenType}, TokenID, JObj) 
 %% @doc Build the FCM message payload.
 %% @end
 %%------------------------------------------------------------------------------
--spec build_message(kz_json:object(), map(), map(), token_type()) -> map().
+-spec build_message(kz_json:object(), kz_json:object(), map(), token_type()) -> map().
 build_message(JObj, CustomData, Envelope, ActiveTokenType) ->
     FlatProps = kz_json:to_proplist(kz_json:flatten(JObj)),
     FlatData = kz_json:map(fun encode_objects/2, CustomData),
