@@ -189,7 +189,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% @doc Send the push notification if an FCM worker is running.
 %% @end
 %%------------------------------------------------------------------------------
--spec maybe_send_push_notification(active_push_app(), reg_id(), kz_json:object()) -> pusher_result:t().
+-spec maybe_send_push_notification(maybe_active_push_app(), reg_id(), kz_json:object()) -> pusher_result:t().
 maybe_send_push_notification('undefined', _, _) ->
     lager:debug("no pid to send push"),
     pusher_result:internal_server_error(<<"No FCM connection">>);
