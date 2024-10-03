@@ -132,6 +132,10 @@ code_change(_OldVsn, State, _Extra) ->
 %%------------------------------------------------------------------------------
 -spec handle_message(kz_json:object(), kz_term:proplist()) -> 'ok'.
 handle_message(JObj, _Props) ->
+    kz_log:put_callid(JObj),
+    'true' = kapi_presence:mwi_update_v(JObj) orelse
+        kapi_presence:mwi_unsolicited_update_v(JObj),
+
     ToRealm = to_realm(JObj),
     case kz_datamgr:get_single_result(?KZ_ACCOUNTS_DB
                                      ,<<"accounts/listing_by_realm">>
