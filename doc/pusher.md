@@ -1,6 +1,6 @@
 
 # Pusher
-pusher app allows kazoo to send a push message to a device when the device is the target of a bridge call, so that the device can "wake up", register and receive the call.
+pusher app allows {% BRAND_NAME %} to send a push message to a device when the device is the target of a bridge call, so that the device can "wake up", register and receive the call.
 
 pusher listens for reg_success messages, checks if the user-agent supports push messages and updates the endpoint_id with a pusher object used in the construction of an endpoint for that device (or a failover endpoint in case of an unregistered device).
 
@@ -101,7 +101,7 @@ The properties identify the *fields*  in the contact header where pusher looks f
 In order for the push services from Apple / Firebase to work they need to be configured with service account files / certificates. The app used in the push message is taken from Token-App.
 
 * `sup pusher_maintenance add_firebase_v1_app AppId ServiceAccountData` (if you have the contents of the service account file)
-* `sup pusher_maintenance add_firebase_v1_app_from_service_account_file AppId ServiceAccountFilename` (if you have the service file on the Kazoo server)
+* `sup pusher_maintenance add_firebase_v1_app_from_service_account_file AppId ServiceAccountFilename` (if you have the service file on the {% BRAND_NAME %} server)
 * `sup pusher_maintenance add_apple_app AppId CertFile` (uses the default APNs host: api.push.apple.com)
 * `sup pusher_maintenance add_apple_app AppId CertFile Host` (uses a custom APNs host, i.e. api.development.push.apple.com)
 
@@ -142,17 +142,17 @@ In order for the push services from Apple / Firebase to work they need to be con
 The full sequence is expected to be four parts.
 
 #### One-time pusher cluster setup (cluster admin):
-1.	In Kazoo, ensure that the pusher application is running at least one instance per-zone
-2.	In Kazoo, for each kamailio service that should be able to handle pusher device registrations/calls ensure that the “PUSHER-ROLE” has been enabled in `local.cfg`
+1.	In {% BRAND_NAME %}, ensure that the pusher application is running at least one instance per-zone
+2.	In {% BRAND_NAME %}, for each kamailio service that should be able to handle pusher device registrations/calls ensure that the “PUSHER-ROLE” has been enabled in `local.cfg`
 
-#### Per-pusher client application Kazoo configuration (developer):
+#### Per-pusher client application {% BRAND_NAME %} configuration (developer):
 1.	Get an application id and either a cert file (for Apple) or secret (from Google) from those providers developer accounts
 	1. The application id is from the Apple/Google developer accounts, created in those portals and are global unique to those ecosystems.
 	2. For example, on Google we control the application id: `org.2600Hz.callthru.us`
-2. In Kazoo, associate the application id with a private cert/secret.  When Kazoo needs to send a push notification for a given application id, these are creds that will be used to authenticate to the Apple/Google services used to notify the client.
+2. In {% BRAND_NAME %}, associate the application id with a private cert/secret.  When {% BRAND_NAME %} needs to send a push notification for a given application id, these are creds that will be used to authenticate to the Apple/Google services used to notify the client.
 	1. When the developer created the Apple/Google developer accounts and application id they would have also generated the cert/secret authentication for the APIs related to that application id
 	2. `sup pusher_maintenance add_firebase_app ApplicationId Secret` or `sup pusher_maintenance add_apple_app ApplicationId CertFile`
-3.	In Kazoo, create a mapping for a unique User-Agent string to the names of the variables that the developer will use to transfer data during registrations.  For example:
+3.	In {% BRAND_NAME %}, create a mapping for a unique User-Agent string to the names of the variables that the developer will use to transfer data during registrations.  For example:
  	1. Assume we will be using the User-Agent `CallThru.Us 1.4.5` we might create a rule such as:
 		1.	`sup kapps_config set_default pusher User-Agents.CallThru.regex ^CallThru`
 		2.	`sup kapps_config set_default pusher User-Agents.CallThru.properties.Token-App app-id`
@@ -164,15 +164,15 @@ The full sequence is expected to be four parts.
 		3.	`foo-bar`: This variable name will be used to transfer the clients unique push ID as provided to the client by Apple/Google
 
 #### Expected pusher client provisioning (software):
-1.	A new pusher client/softphone is provisioned in kazoo (for example, as a SmartPBX device)
-2.	The pusher client/softphone is installed on the mobile device and configured with the Kazoo device info
-3.	At least once after provisioning, the pusher client/softphone should register to a Kazoo kamailio service with the PUSHER-ROLE enabled
+1.	A new pusher client/softphone is provisioned in {% BRAND_NAME %} (for example, as a SmartPBX device)
+2.	The pusher client/softphone is installed on the mobile device and configured with the {% BRAND_NAME %} device info
+3.	At least once after provisioning, the pusher client/softphone should register to a {% BRAND_NAME %} kamailio service with the PUSHER-ROLE enabled
 	1.	This registration must have a SIP `Contact` header that contains the properties defined for that user-agent string
 	2.	Above we defined that for the user-agent `^CallThru` the contact might look like `sip:user@192.168.1.1;reg-id=1;app-id=org.2600Hz.callthru.us;foo-bar=random_push_id_assigned_by_apple;pn-type=apple`
-		1.	The application id `org.2600Hz.callthru.us` would be present as the variable named `app-id`.  This will be used by Kazoo to select the cert/secret already loaded above as well, that is required to authenticate with Apple (or Google) to submit push messages for the pusher client developer.
-		2.	The service type `apple` (or `firebase`) would be present as the variable named `pn-type`.  This is used by Kazoo to select which kazoo pusher module to use to send the notification (correlates to Erlang SDKs for Apple/Google).
+		1.	The application id `org.2600Hz.callthru.us` would be present as the variable named `app-id`.  This will be used by {% BRAND_NAME %} to select the cert/secret already loaded above as well, that is required to authenticate with Apple (or Google) to submit push messages for the pusher client developer.
+		2.	The service type `apple` (or `firebase`) would be present as the variable named `pn-type`.  This is used by {% BRAND_NAME %} to select which {% BRAND_NAME %} pusher module to use to send the notification (correlates to Erlang SDKs for Apple/Google).
 		3.	The unique push address/recipient id that Apple (or Google) assigned as the routing key to get a notification to this device/application `random_push_id_assigned_by_apple` is transferred as `foo-bar`.
-	3.	Kazoo now has everything it needs to relate the client with its unique push address/recipient, the Erlang SDK for the appropriate service, the service’s application id and the private cert/secret of the developer to authenticate with that service.
+	3.	{% BRAND_NAME %} now has everything it needs to relate the client with its unique push address/recipient, the Erlang SDK for the appropriate service, the service’s application id and the private cert/secret of the developer to authenticate with that service.
 	4.	The client should infrequently register again with this information (does not technically have to).
 	5.	NOTE: The push notifications are tied directly to the kamailio the last successful registration occurred to.  In the event that kamailio is unavailable, until the client successfully registers to another kamailio (or it is restored) no push notifications will be sent.
 4.	The client can now completely shutdown, unregister or loose registration.  From this point forward, if a call needs to be delivered it will first receive a push notification from the kamailio it last registered too.
