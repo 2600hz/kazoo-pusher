@@ -90,9 +90,9 @@
 
 ### Apple Push Notification service
 
-- <https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/generating_a_remote_notification>
-- <https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/sending_notification_requests_to_apns>
-- <https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/handling_notification_responses_from_apns>
+- https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/generating_a_remote_notification
+- https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/sending_notification_requests_to_apns
+- https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server/handling_notification_responses_from_apns
 - payload limit: 5120 bytes for VoIP notifications, 4096 bytes for all other remote notifications
 
 ```
@@ -162,14 +162,15 @@ Key                 | Type
 
 ### FCM Legacy HTTP Server Protocol
 
-- <https://firebase.google.com/docs/cloud-messaging/concept-options>
-- collapsible messages: <https://firebase.google.com/docs/cloud-messaging/concept-options#which_should_i_use>
-  - support for `apns-collapse-id`: <https://github.com/firebase/quickstart-ios/issues/68>
+- https://firebase.google.com/docs/cloud-messaging/concept-options
+- collapsible messages: https://firebase.google.com/docs/cloud-messaging/concept-options#which_should_i_use
+  - support for `apns-collapse-id`: https://github.com/firebase/quickstart-ios/issues/68
   > Notification messages are always collapsible and will ignore the `collapse_key` parameter.
 - we are using [FCM Legacy HTTP Server Protocol](https://firebase.google.com/docs/cloud-messaging/http-server-ref)
   - out of scope in [KPUS-4](https://2600hz-commercial.atlassian.net/browse/KPUS-4) to upgrade to [HTTP v1 Protocol](https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages#Notification)
-    - <https://firebase.google.com/docs/cloud-messaging/migrate-v1>
-  - we only support [JSON downstream message syntax](https://firebase.google.com/docs/cloud-messaging/http-server-ref#downstream-http-messages-json) - [plain text](https://firebase.google.com/docs/cloud-messaging/http-server-ref#downstream-http-messages-plain-text) is not supported
+    - https://firebase.google.com/docs/cloud-messaging/migrate-v1
+  - we only support [JSON downstream message syntax](https://firebase.google.com/docs/cloud-messaging/http-server-ref#downstream-http-messages-json)
+  - [plain text](https://firebase.google.com/docs/cloud-messaging/http-server-ref#downstream-http-messages-plain-text) is not supported
 - legacy `push_req`s sent all FCM notification information under the `data` object, meaning battery-optimized (device power state aware) `notification` payloads could not be sent
 - payload limit: 4096 bytes for most messages, 2048 bytes for messages to topics
 
