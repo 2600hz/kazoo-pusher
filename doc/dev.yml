@@ -1,3 +1,4 @@
   - 'Pusher: wake the dead':
+    - 'applications/pusher/doc/engineering.md'
     - 'applications/pusher/doc/maintenance.md'
     - 'applications/pusher/doc/pusher.md'
