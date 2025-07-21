@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2010-2024, 2600Hz
+%%% @copyright (C) 2010-2025, 2600Hz
 %%% @doc
 %%% This Source Code Form is subject to the terms of the Mozilla Public
 %%% License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -199,8 +199,8 @@ maybe_send_push_notification({Pid, ExtraHeaders}, Token, TokenApp, JObj) ->
         lager:debug("apns result for ~s : ~p", [TokenApp, Result]),
         to_pusher_result(Result)
     catch
-        ?CATCH(Ex, Msg, _ST) ->
-            lager:error_unsafe("PUBLISH ERROR => ~p / ~p", [Ex, Msg]),
+        Type:Reason:_ST ->
+            lager:error_unsafe("PUBLISH ERROR => ~p / ~p", [Type, Reason]),
             ?LOGSTACK(_ST),
             pusher_result:internal_server_error(<<"Failed to push notification">>)
     end.
