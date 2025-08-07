@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2010-2024, 2600Hz
+%%% @copyright (C) 2010-2025, 2600Hz
 %%% @doc
 %%% This Source Code Form is subject to the terms of the Mozilla Public
 %%% License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -41,6 +41,8 @@
 
 -define(KEY_APS, <<"aps">>).
 -define(KEY_ALERT, <<"alert">>).
+
+-define(DEFAULT_KEEPALIVE_M, 15).
 
 -define(HEADER_MAP, #{<<"APNs">> => #{<<"Push-Type">> => 'apns_push_type'
                                      ,<<"Topic">> => 'apns_topic'
@@ -271,6 +273,7 @@ maybe_load_apns(App, _, 'undefined', _, _) ->
     lager:debug("apple pusher certificate for app ~s not found", [App]),
     'undefined';
 maybe_load_apns(App, ETS, CertBin, Host, Headers) ->
+    Keepalive = kapps_config:get_pos_integer(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"keepalive_m">>], ?DEFAULT_KEEPALIVE_M, App),
     {Key, Cert} = pusher_util:binary_to_keycert(CertBin),
     lager:debug("starting apple push connection for ~s : ~s", [App, Host]),
     Connection = #{name => kz_term:to_atom(<<"apns_", App/binary>>, 'true')
@@ -282,7 +285,7 @@ maybe_load_apns(App, ETS, CertBin, Host, Headers) ->
                   ,timeout => 10000
                   ,options => #{transport => tls
                                ,trace => false
-                               ,http2_opts => #{keepalive => ?MILLISECONDS_IN_MINUTE  * 15}
+                               ,http2_opts => #{keepalive => ?MILLISECONDS_IN_MINUTE  * Keepalive}
                                }
                   },
     try apns:connect(Connection) of
