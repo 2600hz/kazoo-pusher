@@ -44,6 +44,9 @@
 
 -define(DEFAULT_KEEPALIVE_M, 15).
 
+-define(PUSH_TYPE_VOIP, <<"voip">>).
+-define(PUSH_TYPE_ALERT, <<"alert">>).
+
 -define(HEADER_MAP, #{<<"APNs">> => #{<<"Push-Type">> => 'apns_push_type'
                                      ,<<"Topic">> => 'apns_topic'
                                      }
@@ -182,13 +185,17 @@ log_headers(Headers) ->
 maybe_send_push_notification('undefined', _, _, _) ->
     pusher_result:internal_server_error(<<"No APNs connection">>);
 maybe_send_push_notification({Pid, ExtraHeaders}, Token, TokenApp, JObj) ->
-    JObj1 = maybe_set_apns_topic(TokenApp, JObj),
+    PushType = kz_json:get_value([<<"Data">>, <<"Push-Type">>], JObj),
+    ExtraHeaders1 = maybe_set_apns_push_type(TokenApp, PushType, ExtraHeaders),
+    APNsPushType = maps:get('apns_push_type', ExtraHeaders1),
+
+    JObj1 = maybe_set_apns_topic(TokenApp, JObj, APNsPushType),
     {CustomData, JObj2} = pusher_module_util:extract_custom_data(JObj1),
 
     FlatProps = kz_json:to_proplist(kz_json:flatten(JObj2)),
     MsgId = kz_api:msg_id(JObj2),
 
-    Headers = build_headers(FlatProps, JObj2, MsgId, ExtraHeaders),
+    Headers = build_headers(FlatProps, JObj2, MsgId, ExtraHeaders1),
     Msg = build_payload(FlatProps, JObj2, kz_json:to_map(CustomData)),
 
     lager:debug_unsafe("pushing for token ~s (headers: ~s): ~s"
@@ -311,9 +318,19 @@ maybe_load_apns(App, ETS, CertBin, Host, Headers) ->
 %% @doc Set the APNs topic on the push req if unspecified.
 %% @end
 %%------------------------------------------------------------------------------
--spec maybe_set_apns_topic(kz_term:ne_binary(), kz_json:object()) -> kz_json:object().
-maybe_set_apns_topic(TokenApp, JObj) ->
-    kz_json:insert_value([<<"APNs">>, <<"Topic">>], apns_topic(TokenApp), JObj).
+-spec maybe_set_apns_topic(kz_term:ne_binary(), kz_json:object(), kz_term:ne_binary()) -> kz_json:object().
+maybe_set_apns_topic(TokenApp, JObj, APNsPushType) ->
+    kz_json:insert_value([<<"APNs">>, <<"Topic">>], set_apns_topic(TokenApp, APNsPushType), JObj).
+
+-spec set_apns_topic(kz_term:ne_binary(), kz_term:ne_binary()) -> kz_term:ne_binary().
+set_apns_topic(TokenApp, ?PUSH_TYPE_VOIP) ->
+    Topic = apns_topic(TokenApp),
+    case re:run(Topic, "\\.voip$", [{capture, none}]) of
+        'match' -> Topic;
+        'nomatch' -> <<Topic/binary, ".voip">>
+    end;
+set_apns_topic(TokenApp, _PushType) ->
+    apns_topic(TokenApp).
 
 -spec apns_topic(kz_term:ne_binary()) -> kz_term:ne_binary().
 apns_topic(TokenApp) ->
@@ -396,6 +413,32 @@ set_mutable_content(MutableContent, Payload) ->
 
 -spec mutable_content(boolean()) -> 0 | 1.
 mutable_content(MutableContent) -> to_integer(MutableContent).
+
+%%------------------------------------------------------------------------------
+%% @doc Set the APNs push type on the push req header
+%% @end
+%%------------------------------------------------------------------------------
+-spec maybe_set_apns_push_type(kz_term:ne_binary(), kz_term:ne_binary(), map()) -> map().
+maybe_set_apns_push_type(TokenApp, PushType, ExtraHeaders) ->
+    case kapps_config:get_boolean(?CONFIG_CAT
+                                 ,[?TOKEN_TYPE_APPLE, <<"enable_custom_apns_push_type">>]
+                                 ,'false'
+                                 ,TokenApp
+                                 )
+    of
+        'true' -> set_apns_push_type(PushType, ExtraHeaders);
+        'false' -> ExtraHeaders
+    end.
+
+-spec set_apns_push_type(kz_term:ne_binary(), map()) -> map().
+set_apns_push_type(<<"incoming_call">>, ExtraHeaders) ->
+    ExtraHeaders#{apns_push_type => ?PUSH_TYPE_VOIP};
+
+set_apns_push_type(<<"voicemail">>, ExtraHeaders) ->
+    ExtraHeaders#{apns_push_type => ?PUSH_TYPE_ALERT};
+
+set_apns_push_type(_PushType, ExtraHeaders) ->
+    ExtraHeaders.
 
 %%------------------------------------------------------------------------------
 %% @doc Convert an APNs response into a `pusher_result'.

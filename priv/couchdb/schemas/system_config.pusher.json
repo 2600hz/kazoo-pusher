@@ -20,6 +20,11 @@
                     "description": "PEM-encoded key and certificate",
                     "type": "string"
                 },
+                "enable_custom_apns_push_type": {
+                    "default": false,
+                    "description": "Whether the app is enabled for custom apns_push_type",
+                    "type": "boolean"
+                },
                 "enabled": {
                     "default": true,
                     "description": "Whether the app is enabled for push notifications",
