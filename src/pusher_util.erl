@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2010-2023, 2600Hz
+%%% @copyright (C) 2010-2025, 2600Hz
 %%% @doc
 %%% @author Luis Azedo
 %%%
@@ -18,6 +18,7 @@
 -export([binary_to_keycert/1]).
 -export([user_agent_push_properties/1]).
 -export([timestamp_ms/1]).
+-export([get_push_token/2]).
 
 -include("pusher.hrl").
 
@@ -87,3 +88,21 @@ user_agent_push_properties(UserAgent, [JObj|UAs]) ->
 -spec timestamp_ms(kz_json:object()) -> kz_term:api_integer().
 timestamp_ms(JObj) ->
     kz_json:get_integer_value(?KEY_TIMESTAMP_MS, JObj).
+
+-spec get_push_token(kz_term:api_ne_binary(), kz_json:object()) -> kz_term:api_ne_binary() | kz_json:object().
+get_push_token(?TOKEN_TYPE_APPLE , JObj) ->
+    VoipToken = kz_json:get_ne_binary_value(<<"Voip-Token-ID">>, JObj),
+    DefaultToken = kz_json:get_ne_binary_value(<<"Token-ID">>, JObj),
+    build_apple_token_response(VoipToken, DefaultToken);
+get_push_token(_TokenType , JObj) ->
+    kz_json:get_ne_binary_value(<<"Token-ID">>, JObj).
+
+-spec build_apple_token_response(kz_term:api_ne_binary(), kz_term:api_ne_binary())
+                                -> kz_term:api_ne_binary() | kz_json:object().
+build_apple_token_response('undefined', DefaultToken) ->
+    DefaultToken;
+build_apple_token_response(VoipToken, 'undefined') ->
+    VoipToken;
+build_apple_token_response(VoipToken, DefaultToken) ->
+    kz_json:from_list([{?PUSH_TYPE_VOIP, VoipToken}
+                      ,{?DEFAULT_TOKEN, DefaultToken}]).

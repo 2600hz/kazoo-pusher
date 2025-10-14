@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2013-2024, 2600Hz
+%%% @copyright (C) 2013-2025, 2600Hz
 %%% @doc Maintenance functions for all
 %%% @author Luis Azedo
 %%%
@@ -79,6 +79,7 @@ push(Push) ->
     TokenApp = kz_json:get_ne_binary_value(<<"Token-App">>, Push),
     TokenType = kz_json:get_ne_binary_value(<<"Token-Type">>, Push),
     TokenId = kz_json:get_ne_binary_value(<<"Token-ID">>, Push),
+    VoipTokenId = kz_json:get_ne_binary_value(<<"Voip-Token-ID">>, Push),
     TokenProxy = kz_json:get_ne_binary_value(<<"Token-Proxy">>, Push),
     Payload = [{<<"call-id">>, CallId}
               ,{<<"proxy">>, TokenProxy}
@@ -93,6 +94,7 @@ push(Push) ->
           ,{<<"Event-Name">>, <<"push_req">>}
           ,{<<"Call-ID">>, CallId}
           ,{<<"Token-ID">>, TokenId}
+          ,{<<"Voip-Token-ID">>, VoipTokenId}
           ,{<<"Token-Type">>, TokenType}
           ,{<<"Token-App">>, TokenApp}
           ,{<<"Alert-Key">>, <<"IC_SIL">>}

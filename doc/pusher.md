@@ -46,6 +46,10 @@ https://api.push.apple.com/3/device/[devicetoken]
 #### 4. Update User-Agent Mapping
 
  * `sup kapps_config set_json pusher User-Agents.MyApp '{"regex":"^MyApp","properties":{"Token-App":"app-id","Token-Type":"pn-type","Token-ID":"pn-tok"}}'`
+
+ To add a separate VOIP token ID (required for APNs VOIP pushes):
+
+ * `sup kapps_config set_json pusher User-Agents.MyApp '{"regex":"^MyApp","properties":{"Token-App":"app-id","Token-Type":"pn-type","Token-ID":"pn-tok","Voip-Token-ID":"pn-voip-tok"}}'`
  
  You can also set these one at a time
  
@@ -53,6 +57,11 @@ https://api.push.apple.com/3/device/[devicetoken]
 * `sup kapps_config set_default pusher User-Agents.MyApp.properties.Token-App app-id`
 * `sup kapps_config set_default pusher User-Agents.MyApp.properties.Token-Type pn-type`
 * `sup kapps_config set_default pusher User-Agents.MyApp.properties.Token-ID pn-tok`
+
+This is optional and only required for APNs VOIP pushes:
+
+* `sup kapps_config set_default pusher User-Agents.MyApp.properties.Voip-Token-ID pn-voip-tok`
+
 
 #### 5. Open your Application and REGISTER the device
 
@@ -85,7 +94,8 @@ Unregister the device, and make a call from another device that will be delivere
            "properties": {
                "Token-App": "app-id",
                "Token-Type": "pn-type",
-               "Token-ID": "pn-tok"
+               "Token-ID": "pn-tok",
+			   "Voip-Token-ID": "pn-voip-tok"
            }
        }
    }
@@ -95,6 +105,8 @@ The properties identify the *fields*  in the contact header where pusher looks f
    * Token-App
    * Token-Type
    * Token-ID
+
+Voip-Token-ID is optional and only used for APNs VOIP notifications. If not defined, the Token-ID is used for both VOIP and alert pushes.
 
 ### Maintenance
 

@@ -1,5 +1,5 @@
 %%%-----------------------------------------------------------------------------
-%%% @copyright (C) 2013-2024, 2600Hz
+%%% @copyright (C) 2013-2025, 2600Hz
 %%% @doc
 %%% @author Luis Azedo
 %%%
@@ -66,7 +66,7 @@
 -type endpoint_id() :: kz_term:ne_binary().
 -type endpoint_type() :: 'device' | 'user'.
 %% A tuple containing a token, token app, and token type.
--type push_props() :: {kz_term:api_ne_binary(), kz_term:api_ne_binary(), token_type() | 'undefined'}.
+-type push_props() :: {kz_term:api_ne_binary() | kz_json:object(), kz_term:api_ne_binary(), token_type() | 'undefined'}.
 
 -type device_fetch_error() :: {endpoint_id()
                               ,kz_datamgr:data_errors() | 'invalid_parameters'
@@ -384,7 +384,12 @@ maybe_push_to_target(_, {Token, TokenApp, TokenType}) when Token =:= 'undefined'
 maybe_push_to_target(JObj, {Token, TokenApp, TokenType}) ->
     Module = pm_module(TokenType),
     AppEnabled = app_enabled(TokenApp, Module),
-    lager:info("received push ~s / ~s / ~s", [TokenType, TokenApp, Token]),
+    FormattedToken =
+        case kz_json:is_json_object(Token) of
+            'true' -> kz_json:encode(Token);
+            'false' -> Token
+        end,
+    lager:info("received push ~s / ~s / ~s", [TokenType, TokenApp, FormattedToken]),
 
     case Module of
         'undefined' ->
@@ -394,7 +399,7 @@ maybe_push_to_target(JObj, {Token, TokenApp, TokenType}) ->
             lager:debug("app ~s is disabled for token type ~s", [TokenApp, TokenType]),
             pusher_result:success(<<"App disabled">>);
         _ ->
-            lager:debug("pushing for token ~s(~s) to module ~s", [Token, TokenType, Module]),
+            lager:debug("pushing for token ~s(~s) to module ~s", [FormattedToken, TokenType, Module]),
             Module:push(Token, TokenApp, TokenType, JObj)
     end.
 
@@ -490,9 +495,9 @@ push(JObj) ->
 %%------------------------------------------------------------------------------
 -spec push_props(kz_json:object()) -> push_props().
 push_props(JObj) ->
-    Token = kz_json:get_ne_binary_value(<<"Token-ID">>, JObj),
     TokenApp = kz_json:get_ne_binary_value(<<"Token-App">>, JObj),
     TokenType = kz_json:get_ne_binary_value(<<"Token-Type">>, JObj),
+    Token = pusher_util:get_push_token(TokenType, JObj),
     {Token, TokenApp, TokenType}.
 
 %%------------------------------------------------------------------------------

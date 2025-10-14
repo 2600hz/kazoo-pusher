@@ -28,5 +28,10 @@
 -define(CATCH(Type, Reason, Stacktrace), Type:Reason:Stacktrace).
 -define(LOGSTACK(Stacktrace), kz_log:log_stacktrace(Stacktrace)).
 
+-define(PUSH_TYPE_VOIP, <<"voip">>).
+-define(PUSH_TYPE_ALERT, <<"alert">>).
+
+-define(DEFAULT_TOKEN, <<"default">>).
+
 -define(PUSHER_HRL, 'true').
 -endif.
