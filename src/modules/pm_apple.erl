@@ -42,6 +42,8 @@
 -define(KEY_APS, <<"aps">>).
 -define(KEY_ALERT, <<"alert">>).
 
+-define(DEFAULT_REFRESH_TIMER_M, 55).
+
 -define(DEFAULT_KEEPALIVE_M, 15).
 
 -define(HEADER_MAP, #{<<"APNs">> => #{<<"Push-Type">> => 'apns_push_type'
@@ -81,7 +83,11 @@
                        ,K := header_v()
                        }.
 
--type maybe_push_app() :: push_app() | 'undefined'.
+-type auth_type() :: ?AUTH_TYPE_CERT | ?AUTH_TYPE_TOKEN.
+-type auth_token() :: kz_term:api_ne_binary().
+
+-type auth_push_app() :: {push_app(), auth_type(), auth_token()}.
+-type maybe_auth_push_app() :: auth_push_app() | 'undefined'.
 
 -spec start_link() -> kz_types:startlink_ret().
 start_link() ->
@@ -99,7 +105,7 @@ enabled(App) ->
 %% @doc Send a push notification using this service.
 %% @end
 %%------------------------------------------------------------------------------
--spec push(kz_term:ne_binary() | kz_json:object(), push_app_id(), token_type(), kz_json:object()) -> pusher_result:t().
+-spec push(kz_term:ne_binary(), push_app_id(), token_type(), kz_json:object()) -> pusher_result:t().
 push(Token, TokenApp, _TokenType, JObj) ->
     gen_server:call(?SERVER, {'push', Token, TokenApp, JObj}).
 
@@ -138,11 +144,21 @@ handle_info({'DOWN', Ref, 'process', Pid, Reason}, #state{tab=ETS}=State) ->
                 ets:delete(ETS, App),
                 erlang:send_after(?MILLISECONDS_IN_SECOND * 5, self(), {'reload', App});
             _ ->
-                lager:critical("app not found")
+                lager:warning("app not found for ~p (died: ~p)", [Pid, Reason])
         end,
     {'noreply', State};
 handle_info({'reload', App}, #state{tab=ETS}=State) ->
     _ = reload_apns(App, ETS),
+    {'noreply', State};
+handle_info({'refresh_auth_token', App}, #state{tab=ETS}=State) ->
+    case ets:lookup(ETS, App) of
+        [{App, {Push, ?AUTH_TYPE_TOKEN, _AuthToken}}] ->
+            NewAuthToken = generate_auth_token(App, ?AUTH_TYPE_TOKEN),
+            'true' = ets:insert(ETS, {App, {Push, ?AUTH_TYPE_TOKEN, NewAuthToken}}),
+            'ok';
+        _Else ->
+            lager:warning("unable to find auth token info for app ~s", [App])
+    end,
     {'noreply', State};
 handle_info(_Msg, State) ->
     lager:debug_unsafe("unhandled message => ~p", [_Msg]),
@@ -174,14 +190,14 @@ log_headers(Headers) ->
 %% @doc Send the push notification if a connection is established to APNs.
 %% @end
 %%------------------------------------------------------------------------------
--spec maybe_send_push_notification(maybe_push_app()
-                                  ,kz_term:ne_binary() | kz_json:object()
+-spec maybe_send_push_notification(maybe_auth_push_app()
+                                  ,kz_term:ne_binary()
                                   ,kz_term:ne_binary()
                                   ,kz_json:object()
                                   ) -> pusher_result:t().
 maybe_send_push_notification('undefined', _, _, _) ->
     pusher_result:internal_server_error(<<"No APNs connection">>);
-maybe_send_push_notification({Pid, ExtraHeaders}, TokenValues, TokenApp, JObj) ->
+maybe_send_push_notification({{Pid, ExtraHeaders}, AuthType, AuthToken}, Token, TokenApp, JObj) ->
     PushType = kz_json:get_value([<<"Data">>, <<"Push-Type">>], JObj),
     ExtraHeaders1 = maybe_set_apns_push_type(TokenApp, PushType, ExtraHeaders),
     APNsPushType = maps:get('apns_push_type', ExtraHeaders1, 'undefined'),
@@ -195,21 +211,26 @@ maybe_send_push_notification({Pid, ExtraHeaders}, TokenValues, TokenApp, JObj) -
     Headers = build_headers(FlatProps, JObj2, MsgId, ExtraHeaders1),
     Msg = build_payload(FlatProps, JObj2, kz_json:to_map(CustomData)),
 
-    Token = get_preferred_token(APNsPushType, TokenValues),
-
-    lager:debug_unsafe("pushing for token ~s (headers: ~s): ~s"
+    lager:debug_unsafe("pushing for token ~s (headers: ~s): ~s via ~s based authentication"
                       ,[Token
                        ,log_headers(Headers)
                        ,kz_json:encode(kz_json:from_map(Msg))
+                       ,AuthType
                        ]),
     try
-        Result = apns:push_notification(Pid, Token, Msg, Headers),
+        Result =
+            case AuthType of
+                ?AUTH_TYPE_CERT ->
+                    apns:push_notification(Pid, Token, Msg, Headers);
+                ?AUTH_TYPE_TOKEN ->
+                    apns:push_notification_token(Pid, AuthToken, Token, Msg, Headers)
+            end,
         lager:debug("apns result for ~s : ~p", [TokenApp, Result]),
         to_pusher_result(Result)
     catch
-        ?CATCH(Ex, Msg, _ST) ->
-            lager:error_unsafe("PUBLISH ERROR => ~p / ~p", [Ex, Msg]),
-            ?LOGSTACK(_ST),
+        Type:Reason:_ST ->
+            lager:error_unsafe("PUBLISH ERROR => ~p / ~p", [Type, Reason]),
+            kz_log:log_stacktrace(_ST),
             pusher_result:internal_server_error(<<"Failed to push notification">>)
     end.
 
@@ -254,63 +275,125 @@ reload_apns(App, ETS) ->
         _Push -> 'ok'
     end.
 
--spec get_apns(kz_term:ne_binary(), ets:tid()) -> maybe_push_app().
+-spec get_apns(kz_term:ne_binary(), ets:tid()) -> maybe_auth_push_app().
 get_apns(App, ETS) ->
     case ets:lookup(ETS, App) of
         [] -> maybe_load_apns(App, ETS);
         [{App, Push}] -> Push
     end.
 
--spec maybe_load_apns(kz_term:ne_binary(), ets:tid()) -> maybe_push_app().
+-spec maybe_load_apns(kz_term:ne_binary(), ets:tid()) -> maybe_auth_push_app().
 maybe_load_apns(App, ETS) ->
-    CertBin = kapps_config:get_ne_binary(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"certificate">>], 'undefined', App),
+    AuthType = kapps_config:get_atom(?CONFIG_CAT ,[?TOKEN_TYPE_APPLE, <<"auth_type">>] ,'undefined', App),
+    AuthData =
+        case AuthType of
+            ?AUTH_TYPE_CERT ->
+                kapps_config:get_ne_binary(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"certificate">>], 'undefined', App);
+            ?AUTH_TYPE_TOKEN->
+                [read_pem_file()
+                ,kapps_config:get_ne_binary(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"team_id">>], 'undefined', App)
+                ,kapps_config:get_ne_binary(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"key_id">>], 'undefined', App)
+                ]
+        end,
     Host = kapps_config:get_ne_binary(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"host">>], ?DEFAULT_APNS_HOST, App),
     ExtraHeaders = kapps_config:get_json(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"headers">>], kz_json:new(), App),
     Headers = kz_maps:keys_to_atoms(kz_json:to_map(ExtraHeaders)),
-    maybe_load_apns(App, ETS, CertBin, Host, Headers).
+    maybe_load_apns(App, ETS, AuthType, AuthData, Host, Headers).
 
 -spec maybe_load_apns(kz_term:ne_binary()
                      ,ets:tid()
-                     ,kz_term:api_ne_binary()
+                     ,auth_type()
+                     ,kz_term:api_ne_binary_or_binaries()
                      ,kz_term:ne_binary()
                      ,map()
-                     ) -> maybe_push_app().
-maybe_load_apns(App, _, 'undefined', _, _) ->
+                     ) -> maybe_auth_push_app().
+maybe_load_apns(App, _, ?AUTH_TYPE_CERT, 'undefined', _, _) ->
     lager:debug("apple pusher certificate for app ~s not found", [App]),
     'undefined';
-maybe_load_apns(App, ETS, CertBin, Host, Headers) ->
+maybe_load_apns(App, _, ?AUTH_TYPE_TOKEN, [TokenKey, TeamId, KeyId], _, _) when TokenKey =:= 'undefined'
+                                                                                orelse TeamId =:= 'undefined'
+                                                                                orelse KeyId =:= 'undefined' ->
+    lager:debug("apple pusher token key or team id or key id for app ~s not found", [App]),
+    'undefined';
+maybe_load_apns(App, ETS, AuthType, AuthData, Host, Headers) ->
     Keepalive = kapps_config:get_pos_integer(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"keepalive_m">>], ?DEFAULT_KEEPALIVE_M, App),
-    {Key, Cert} = pusher_util:binary_to_keycert(CertBin),
+    ConnectionMap = #{name => kz_term:to_atom(<<"apns_", App/binary>>, 'true')
+                     ,apple_host => kz_term:to_list(Host)
+                     ,apple_port => 443
+                     ,timeout => 10000
+                     ,options => #{transport => 'tls'
+                                  ,trace => 'false'
+                                  ,http2_opts => #{keepalive => ?MILLISECONDS_IN_MINUTE  * Keepalive}
+                                  }
+                     },
+    Connection = create_connection_record(ConnectionMap, AuthType, AuthData),
+
     lager:debug("starting apple push connection for ~s : ~s", [App, Host]),
-    Connection = #{name => kz_term:to_atom(<<"apns_", App/binary>>, 'true')
-                  ,apple_host => kz_term:to_list(Host)
-                  ,apple_port => 443
-                  ,type => 'certdata'
-                  ,certdata => Cert
-                  ,keydata => Key
-                  ,timeout => 10000
-                  ,options => #{transport => tls
-                               ,trace => false
-                               ,http2_opts => #{keepalive => ?MILLISECONDS_IN_MINUTE  * Keepalive}
-                               }
-                  },
     try apns:connect(Connection) of
         {'ok', Pid} ->
-            ets:insert(ETS, {App, {Pid, Headers}}),
-            Ref = erlang:monitor(process, Pid),
+            AuthToken = generate_auth_token(App, AuthType),
+            ets:insert(ETS, {App, {{Pid, Headers}, AuthType, AuthToken}}),
+            Ref = erlang:monitor('process', Pid),
             ets:insert(ETS, {Ref, App}),
-            {Pid, Headers};
+            {{Pid, Headers}, AuthType, AuthToken};
         {'error', {'already_started', Pid}} ->
             apns:close_connection(Pid),
-            maybe_load_apns(App, ETS, CertBin, Host, Headers);
+            maybe_load_apns(App, ETS, AuthType, AuthData, Host, Headers);
         {'error', Reason} ->
             lager:error("error loading apns ~p", [Reason]),
             'undefined'
     catch
-        ?CATCH(_Er, _Ex,_ST) ->
+        _Er:_Ex:_ST ->
             lager:error("error loading apns ~p / ~p", [_Er, _Ex]),
-            ?LOGSTACK(_ST),
-            undefined
+            kz_log:log_stacktrace(_ST),
+            'undefined'
+    end.
+
+-spec create_connection_record(map(), auth_type(), kz_term:api_ne_binary_or_binaries()) -> map().
+create_connection_record(Connection, ?AUTH_TYPE_CERT, CertBin) ->
+    {Key, Cert} = pusher_util:binary_to_keycert(CertBin),
+    maps:merge(Connection
+              ,#{type => ?AUTH_TYPE_CERT
+                ,certdata => Cert
+                ,keydata => Key
+                }
+              );
+create_connection_record(Connection, ?AUTH_TYPE_TOKEN, _TokenInfo) ->
+    maps:merge(Connection, #{type => ?AUTH_TYPE_TOKEN}).
+
+-spec generate_auth_token(kz_term:ne_binary(), auth_type()) -> kz_term:api_ne_binary().
+generate_auth_token(_App, ?AUTH_TYPE_CERT) ->
+    'undefined';
+generate_auth_token(App, ?AUTH_TYPE_TOKEN) ->
+    TeamID = kapps_config:get_ne_binary(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"team_id">>], 'undefined', App),
+    KeyID = kapps_config:get_ne_binary(?CONFIG_CAT, [?TOKEN_TYPE_APPLE, <<"key_id">>], 'undefined', App),
+    TokenKeyContent = read_pem_file(),
+    [FirstEntry | _] = public_key:pem_decode(TokenKeyContent),
+    PrivateKey = public_key:pem_entry_decode(FirstEntry),
+    RefreshWindow = kapps_config:get_pos_integer(?CONFIG_CAT
+                                                ,[?TOKEN_TYPE_APPLE, <<"token_refresh_window">>]
+                                                ,?DEFAULT_REFRESH_TIMER_M, App
+                                                ),
+    try apns:generate_token(TeamID, KeyID, PrivateKey) of
+        AuthToken ->
+            erlang:send_after(?MILLISECONDS_IN_MINUTE  * RefreshWindow, self(), {'refresh_auth_token', App}),
+            AuthToken
+    catch
+        _Er:_Ex:_ST ->
+            lager:error("error generating apns token~p / ~p", [_Er, _Ex]),
+            kz_log:log_stacktrace(_ST),
+            'undefined'
+    end.
+
+-spec read_pem_file() -> kz_term:api_ne_binary().
+read_pem_file() ->
+    case kz_datamgr:fetch_attachment(?KZ_CONFIG_DB, ?CONFIG_CAT, ?APNS_AUTH_KEY_PEM) of
+        {'ok', PvtKeyContent} -> PvtKeyContent;
+        {'error', _Reason} ->
+            lager:debug("unable to open pem file for APNs token based authentication : ~p"
+                       ,[_Reason]
+                       ),
+            'undefined'
     end.
 
 %%------------------------------------------------------------------------------
@@ -319,27 +402,28 @@ maybe_load_apns(App, ETS, CertBin, Host, Headers) ->
 %%------------------------------------------------------------------------------
 -spec maybe_set_apns_topic(kz_term:ne_binary(), kz_json:object(), kz_term:api_ne_binary()) -> kz_json:object().
 maybe_set_apns_topic(TokenApp, JObj, APNsPushType) ->
-    kz_json:insert_value([<<"APNs">>, <<"Topic">>], set_apns_topic(TokenApp, APNsPushType), JObj).
+    kz_json:insert_value([<<"APNs">>, <<"Topic">>]
+                        ,set_apns_topic(apns_topic(TokenApp), APNsPushType)
+                        ,JObj
+                        ).
 
 -spec set_apns_topic(kz_term:ne_binary(), kz_term:api_ne_binary()) -> kz_term:ne_binary().
-set_apns_topic(TokenApp, ?PUSH_TYPE_VOIP) ->
-    Topic = apns_topic(TokenApp),
+set_apns_topic(Topic, ?PUSH_TYPE_VOIP) ->
     case re:run(Topic, "\\.voip$", [{'capture', 'none'}]) of
         'match' -> Topic;
         'nomatch' -> <<Topic/binary, ".voip">>
     end;
-set_apns_topic(TokenApp, ?PUSH_TYPE_ALERT) ->
-    Topic = apns_topic(TokenApp),
+set_apns_topic(Topic, ?PUSH_TYPE_ALERT) ->
     case re:run(Topic, "\\.voip$", [{'capture', 'none'}]) of
         'match' -> re:replace(Topic, "\\.voip$", <<>>, [{'return', 'binary'}]);
         'nomatch' -> Topic
     end;
-set_apns_topic(TokenApp, _PushType) ->
-    apns_topic(TokenApp).
+set_apns_topic(Topic, _PushType) ->
+    Topic.
 
 -spec apns_topic(kz_term:ne_binary()) -> kz_term:ne_binary().
 apns_topic(TokenApp) ->
-    case kapps_config:get_ne_binary(<<"pusher">>
+    case kapps_config:get_ne_binary(?CONFIG_CAT
                                    ,[?TOKEN_TYPE_APPLE, <<"apns_topic">>]
                                    ,'undefined'
                                    ,TokenApp
@@ -442,21 +526,8 @@ set_apns_push_type(<<"voicemail">>, ExtraHeaders) ->
     ExtraHeaders#{apns_push_type => ?PUSH_TYPE_ALERT};
 set_apns_push_type(<<"missed_call">>, ExtraHeaders) ->
     ExtraHeaders#{apns_push_type => ?PUSH_TYPE_ALERT};
-
 set_apns_push_type(_PushType, ExtraHeaders) ->
     ExtraHeaders.
-
-%%------------------------------------------------------------------------------
-%% @doc Set the Token ID based on push type of the push req
-%% @end
-%%------------------------------------------------------------------------------
--spec get_preferred_token(kz_term:api_ne_binary(), kz_term:ne_binary() | kz_json:object()) -> kz_term:ne_binary().
-get_preferred_token(_PushType, Token) when is_binary(Token)->
-    Token;
-get_preferred_token(?PUSH_TYPE_VOIP, Token) ->
-    kz_json:get_ne_binary_value(?PUSH_TYPE_VOIP, Token);
-get_preferred_token(_PushType, Token) ->
-    kz_json:get_ne_binary_value(?DEFAULT_TOKEN, Token).
 
 %%------------------------------------------------------------------------------
 %% @doc Convert an APNs response into a `pusher_result'.

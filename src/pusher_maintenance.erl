@@ -15,6 +15,7 @@
         ,add_firebase_v1_app_from_service_account_file/2
         ,add_firebase_app/2
         ,add_apple_app/2, add_apple_app/3
+        ,add_apple_pem_file/1
         ,push/2
         ]).
 
@@ -61,6 +62,18 @@ add_apple_app(AppId, Certfile, Host) ->
         {'error', _} = Err -> Err
     end.
 
+-spec add_apple_pem_file(binary()) -> 'ok' | {'error', atom()}.
+add_apple_pem_file(PemKeyFile) ->
+    case file:read_file(PemKeyFile) of
+        {'ok', Binary} ->
+            Options = [{'content_type', <<"application/x-pem-file">>}],
+            case kz_datamgr:put_attachment(?KZ_CONFIG_DB, ?CONFIG_CAT, ?APNS_AUTH_KEY_PEM, Binary, Options) of
+                {'ok', _} -> 'ok';
+                {'error', _} = Err -> Err
+            end;
+        {'error', _} = Err -> Err
+    end.
+
 -spec push(kz_term:ne_binary(), kz_term:ne_binary()) -> 'ok'.
 push(AccountId, DeviceId) ->
     case kzd_devices:fetch(AccountId, DeviceId) of
@@ -79,7 +92,6 @@ push(Push) ->
     TokenApp = kz_json:get_ne_binary_value(<<"Token-App">>, Push),
     TokenType = kz_json:get_ne_binary_value(<<"Token-Type">>, Push),
     TokenId = kz_json:get_ne_binary_value(<<"Token-ID">>, Push),
-    VoipTokenId = kz_json:get_ne_binary_value(<<"Voip-Token-ID">>, Push),
     TokenProxy = kz_json:get_ne_binary_value(<<"Token-Proxy">>, Push),
     Payload = [{<<"call-id">>, CallId}
               ,{<<"proxy">>, TokenProxy}
@@ -94,7 +106,6 @@ push(Push) ->
           ,{<<"Event-Name">>, <<"push_req">>}
           ,{<<"Call-ID">>, CallId}
           ,{<<"Token-ID">>, TokenId}
-          ,{<<"Voip-Token-ID">>, VoipTokenId}
           ,{<<"Token-Type">>, TokenType}
           ,{<<"Token-App">>, TokenApp}
           ,{<<"Alert-Key">>, <<"IC_SIL">>}

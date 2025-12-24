@@ -16,6 +16,14 @@
                     "description": "APNs topic for push notifications payload",
                     "type": "string"
                 },
+                "auth_type": {
+                    "description": "Whether the APNs authentication method is certificate based or token based auth",
+                    "enum": [
+                        "certdata",
+                        "token"
+                    ],
+                    "type": "string"
+                },
                 "certificate": {
                     "description": "PEM-encoded key and certificate",
                     "type": "string"
@@ -44,6 +52,21 @@
                     "default": 15,
                     "description": "pusher apple keepalive_m",
                     "minimum": 1,
+                    "type": "integer"
+                },
+                "key_id": {
+                    "description": "Key ID of the APNs authentication key (.p8 file) from Apple Developer portal",
+                    "type": "string"
+                },
+                "team_id": {
+                    "description": "Apple Developer Team ID (10-character identifier for your developer account)",
+                    "type": "string"
+                },
+                "token_refresh_window": {
+                    "default": 55,
+                    "description": "Interval (in minutes) for refreshing the APNs auth token",
+                    "maximum": 60,
+                    "minimum": 20,
                     "type": "integer"
                 }
             },

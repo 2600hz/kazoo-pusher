@@ -25,13 +25,13 @@
 -type push_app() :: {kz_term:api_pid(), map()}.
 -type token_type() :: kz_term:ne_binary().
 
--define(CATCH(Type, Reason, Stacktrace), Type:Reason:Stacktrace).
--define(LOGSTACK(Stacktrace), kz_log:log_stacktrace(Stacktrace)).
+-define(AUTH_TYPE_CERT, 'certdata').
+-define(AUTH_TYPE_TOKEN, 'token').
+
+-define(APNS_AUTH_KEY_PEM, <<"private_key.p8">>).
 
 -define(PUSH_TYPE_VOIP, <<"voip">>).
 -define(PUSH_TYPE_ALERT, <<"alert">>).
-
--define(DEFAULT_TOKEN, <<"default">>).
 
 -define(PUSHER_HRL, 'true').
 -endif.
